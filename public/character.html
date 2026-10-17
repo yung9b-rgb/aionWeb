@@ -58,6 +58,7 @@
     </div>
   </div>
   <script src="vendors/base/vendor.bundle.base.js"></script>
+  <script src="js/i18n.js"></script>
   <script src="js/app.js"></script>
   <script src="vendors/datatables.net/jquery.dataTables.js"></script>
   <script src="vendors/datatables.net-bs4/dataTables.bootstrap4.js"></script>
@@ -70,30 +71,30 @@
       try {
         const c = await AA.api('GET', '/api/characters/' + encodeURIComponent(id));
         document.getElementById('name').textContent = c.user_id;
-        document.title = c.user_id + ' · 永恒之塔 GM';
+        document.title = c.user_id + ' · ' + AA.t('永恒之塔 GM');
         document.getElementById('mail-btn').href = 'mail.html?to=' + encodeURIComponent(c.user_id);
         const h = Math.floor((c.playtime || 0) / 3600);
         const rows = [
-          ['角色 ID', c.char_id], ['账号', AA.esc(c.account_name) + ` <span class="text-muted">#${c.account_id}</span>`],
-          ['种族', AA.raceBadge(c.race)], ['职业', AA.CLASSES[c.class] ?? c.class], ['性别', c.gender ? '女' : '男'],
-          ['等级', c.lev], ['经验', Number(c.exp).toLocaleString()], ['深渊点数', Number(c.abyss_point).toLocaleString()],
-          ['GM 权限', c.builder === '1' ? '<span class="badge bg-warning">GM</span>' : '无'],
-          ['军团 ID', c.guild_id || '无'], ['地图', c.world],
+          ['角色 ID', c.char_id], ['账号', `<span data-no-i18n>${AA.esc(c.account_name)}</span> <span class="text-muted">#${c.account_id}</span>`],
+          ['种族', AA.raceBadge(c.race)], ['职业', AA.CLASSES[c.class] ?? c.class], ['性别', AA.t(c.gender ? '女' : '男')],
+          ['等级', c.lev], ['经验', AA.fmtNum(c.exp)], ['深渊点数', AA.fmtNum(c.abyss_point)],
+          ['GM 权限', c.builder === '1' ? '<span class="badge bg-warning">GM</span>' : AA.t('无')],
+          ['军团 ID', c.guild_id || AA.t('无')], ['地图', c.world],
           ['坐标', `${Math.round(c.xlocation)}, ${Math.round(c.ylocation)}, ${Math.round(c.zlocation)}`],
-          ['游戏时长', h + ' 小时'], ['创建时间', AA.fmtTime(c.create_date)],
+          ['游戏时长', AA.t('{0} 小时', h)], ['创建时间', AA.fmtTime(c.create_date)],
           ['最近登录', AA.fmtTime(c.last_login_time)], ['最近登出', AA.fmtTime(c.last_logout_time)],
         ];
-        document.getElementById('info').innerHTML = rows.map(([k, v]) => `<tr><th class="text-muted">${k}</th><td>${v}</td></tr>`).join('');
+        document.getElementById('info').innerHTML = rows.map(([k, v]) => `<tr><th class="text-muted">${AA.t(k)}</th><td>${v}</td></tr>`).join('');
         $('#items').DataTable({
           data: c.items,
           pageLength: 25,
           order: [[0, 'asc'], [6, 'asc']],
-          language: { search: '搜索：', lengthMenu: '每页 _MENU_ 条', info: '共 _TOTAL_ 件', infoEmpty: '没有物品',
+          language: AA.lang === 'en' ? {} : { search: '搜索：', lengthMenu: '每页 _MENU_ 条', info: '共 _TOTAL_ 件', infoEmpty: '没有物品',
             infoFiltered: '（从 _MAX_ 件中筛选）', zeroRecords: '没有匹配的物品', emptyTable: '没有物品',
             paginate: { first: '首页', last: '末页', next: '下一页', previous: '上一页' } },
           columns: [
-            { data: 'warehouse', render: (v, t) => t === 'display' ? (AA.WAREHOUSES[v] ?? `位置 ${v}`) : v },
-            { data: 'item_name', render: (v, t, r) => t === 'display' ? `<span class="aa-quality-${AA.esc(String(r.quality).toLowerCase())}">${AA.esc(v)}</span>` : v },
+            { data: 'warehouse', render: (v, t) => t === 'display' ? (AA.WAREHOUSES[v] ?? AA.t('位置 {0}', v)) : v },
+            { data: (r) => AA.lang === 'en' ? (r.item_name_en || r.item_name) : r.item_name, render: (v, t, r) => t === 'display' ? `<span class="aa-quality-${AA.esc(String(r.quality).toLowerCase())}">${AA.esc(v)}</span>` : v },
             { data: 'name_id' },
             { data: 'amount' },
             { data: 'enchant_count', render: (v) => v ? '+' + v : '' },
@@ -102,7 +103,7 @@
           ],
         });
       } catch (e) {
-        AA.toast('加载失败：' + e.message, 'danger');
+        AA.toast(AA.t('加载失败：{0}', e.message), 'danger');
       }
     })();
   </script>

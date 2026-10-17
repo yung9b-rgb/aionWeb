@@ -7,6 +7,7 @@
 import net from 'node:net';
 import fs from 'node:fs';
 import path from 'node:path';
+import { L, pick, type Lang, type Msg } from './i18n.ts';
 
 const SK = Buffer.from('nKO/WctQ0AVLbpzfBkS6NevDYT8ourG5CRlmdjyJ72aswx4EPq1UgZhFMXH?3iI9', 'latin1');
 const M = 0xffff;
@@ -52,7 +53,7 @@ const hex = (b: Buffer) => [...b].map((x) => x.toString(16).padStart(2, '0')).jo
 const utf16z = (b: Buffer) => b.toString('utf16le').split('\0', 1)[0];
 
 export type LogCat = 'gm' | 'conn' | 'pkt' | 'err';
-export type LogLine = { seq: number; t: number; cat: LogCat; text: string };
+export type LogLine = { seq: number; t: number; cat: LogCat; text: Msg };
 
 export type ProxyOptions = { listenHost: string; listenPort: number; targetHost: string; targetPort: number; logDir: string };
 
@@ -69,7 +70,7 @@ export class GmProxy {
   private fileDay = '';
   private file: fs.WriteStream | null = null;
   startedAt: number | null = null;
-  lastError: string | null = null;
+  lastError: Msg | null = null;
   commands = 0;
 
   constructor(opt: ProxyOptions) { this.opt = opt; }
@@ -77,7 +78,7 @@ export class GmProxy {
   get running(): boolean { return !!this.server?.listening; }
   get clients(): number { return Math.floor(this.sockets.size / 2); }
 
-  log(cat: LogCat, text: string): void {
+  log(cat: LogCat, text: Msg): void {
     if (cat === 'pkt' && !this.logPackets) return;
     const line = { seq: ++this.seq, t: Date.now(), cat, text };
     this.lines.push(line);
@@ -99,11 +100,11 @@ export class GmProxy {
       this.file = fs.createWriteStream(path.join(this.opt.logDir, `gm_${day}.log`), { flags: 'a', encoding: 'utf8' });
       this.fileDay = day;
     }
-    this.file!.write(`${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}.${p2(d.getMilliseconds(), 3)} [${l.cat}] ${l.text}\n`);
+    this.file!.write(`${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}.${p2(d.getMilliseconds(), 3)} [${l.cat}] ${pick(l.text, 'zh')}\n`);
   }
 
-  logsSince(since: number, includePackets: boolean): LogLine[] {
-    return this.lines.filter((l) => l.seq > since && (includePackets || l.cat !== 'pkt'));
+  logsSince(since: number, includePackets: boolean, lang: Lang = 'zh') {
+    return this.lines.filter((l) => l.seq > since && (includePackets || l.cat !== 'pkt')).map((l) => ({ ...l, text: pick(l.text, lang) }));
   }
 
   clearLogs(): void { this.lines = []; }
@@ -114,17 +115,19 @@ export class GmProxy {
       const srv = net.createServer((c) => this.onClient(c));
       srv.once('error', (e: NodeJS.ErrnoException) => {
         this.lastError = e.code === 'EADDRINUSE'
-          ? `端口 ${this.opt.listenPort} 已被占用（独立的 GMProxy 窗口可能还开着，先关掉它）`
+          ? L(`端口 ${this.opt.listenPort} 已被占用（独立的 GMProxy 窗口可能还开着，先关掉它）`,
+              `Port ${this.opt.listenPort} is already in use (a standalone GMProxy window may still be open; close it first)`)
           : e.message;
-        this.log('err', `启动失败：${this.lastError}`);
+        this.log('err', L(`启动失败：${pick(this.lastError, 'zh')}`, `Start failed: ${pick(this.lastError, 'en')}`));
         this.server = null;
-        reject(new Error(this.lastError));
+        reject(Object.assign(new Error(pick(this.lastError, 'zh')), { msg: typeof this.lastError === 'string' ? { zh: this.lastError, en: this.lastError } : this.lastError }));
       });
       srv.listen(this.opt.listenPort, this.opt.listenHost, () => {
         this.server = srv;
         this.startedAt = Date.now();
         this.lastError = null;
-        this.log('conn', `代理已启动 ${this.opt.listenHost}:${this.opt.listenPort} -> ${this.opt.targetHost}:${this.opt.targetPort}`);
+        const where = `${this.opt.listenHost}:${this.opt.listenPort} -> ${this.opt.targetHost}:${this.opt.targetPort}`;
+        this.log('conn', L(`代理已启动 ${where}`, `Proxy started ${where}`));
         resolve();
       });
     });
@@ -138,7 +141,7 @@ export class GmProxy {
       this.server.close(() => resolve());
       this.server = null;
       this.startedAt = null;
-      this.log('conn', '代理已停止（已断开所有游戏连接）');
+      this.log('conn', L('代理已停止（已断开所有游戏连接）', 'Proxy stopped (all game connections closed)'));
     });
   }
 
@@ -147,21 +150,22 @@ export class GmProxy {
     const u = net.createConnection({ host: this.opt.targetHost, port: this.opt.targetPort });
     this.sockets.add(c); this.sockets.add(u);
     c.setNoDelay(true); u.setNoDelay(true);
-    this.log('conn', `[${s.id}] 客户端 ${c.remoteAddress}:${c.remotePort} 已连接`);
+    this.log('conn', L(`[${s.id}] 客户端 ${c.remoteAddress}:${c.remotePort} 已连接`, `[${s.id}] client ${c.remoteAddress}:${c.remotePort} connected`));
     let closed = false;
-    const close = (why: string) => {
+    const close = (why: Msg) => {
       if (closed) return;
       closed = true;
-      this.log('conn', `[${s.id}] 连接关闭：${why}`);
+      this.log('conn', L(`[${s.id}] 连接关闭：${pick(why, 'zh')}`, `[${s.id}] connection closed: ${pick(why, 'en')}`));
       c.destroy(); u.destroy();
       this.sockets.delete(c); this.sockets.delete(u);
     };
-    c.on('end', () => close('客户端断开'));
-    u.on('end', () => close('主服务器断开'));
-    u.on('error', (e) => close(`连接主服务器失败/出错：${e.message}`));
-    c.on('error', (e) => close(`客户端出错：${e.message}`));
-    c.on('close', () => close('客户端断开'));
-    u.on('close', () => close('主服务器断开'));
+    const byClient = L('客户端断开', 'client disconnected'), byServer = L('主服务器断开', 'main server disconnected');
+    c.on('end', () => close(byClient));
+    u.on('end', () => close(byServer));
+    u.on('error', (e) => close(L(`连接主服务器失败/出错：${e.message}`, `main server connection failed/error: ${e.message}`)));
+    c.on('error', (e) => close(L(`客户端出错：${e.message}`, `client error: ${e.message}`)));
+    c.on('close', () => close(byClient));
+    u.on('close', () => close(byServer));
     this.pump(c, u, s, true);
     this.pump(u, c, s, false);
   }
@@ -179,7 +183,8 @@ export class GmProxy {
         try {
           out.push(c2s ? this.c2s(pkt, s) : this.s2c(pkt, s));
         } catch (e: any) {
-          this.log('err', `[${s.id}] ${c2s ? 'C->S' : 'S->C'} 处理出错 ${e?.message}，原样转发`);
+          const dir = c2s ? 'C->S' : 'S->C';
+          this.log('err', L(`[${s.id}] ${dir} 处理出错 ${e?.message}，原样转发`, `[${s.id}] ${dir} handling failed (${e?.message}); forwarded unchanged`));
           out.push(pkt);
         }
       }
@@ -201,10 +206,10 @@ export class GmProxy {
         const cmd = text.slice(2).trim();
         outPlain = builderPacket(cmd);
         this.commands++;
-        this.log('gm', `[${s.id}] 聊天 "${text}" → GM 命令 "${cmd}"`);
+        this.log('gm', L(`[${s.id}] 聊天 "${text}" → GM 命令 "${cmd}"`, `[${s.id}] chat "${text}" → GM command "${cmd}"`));
       }
     }
-    if (idx === C_BUILDER_COMMAND) this.log('gm', `[${s.id}] 客户端 GM 窗口命令 "${utf16z(p.subarray(5))}"`);
+    if (idx === C_BUILDER_COMMAND) { const c = utf16z(p.subarray(5)); this.log('gm', L(`[${s.id}] 客户端 GM 窗口命令 "${c}"`, `[${s.id}] client GM window command "${c}"`)); }
     const enc = encrypt(outPlain, s.sout);
     s.sout = roll(s.sout, outPlain.length);
     if (outPlain === p) this.log('pkt', `[${s.id}] C->S len=${pkt.length} idx=${idx} data=${hex(p.subarray(5, 37))}`);
@@ -223,14 +228,15 @@ export class GmProxy {
       key.writeUInt32LE(b, 0);
       Buffer.from([0xa1, 0x6c, 0x54, 0x87]).copy(key, 4);
       s.cin = Buffer.from(key); s.sout = Buffer.from(key); s.sk = Buffer.from(key);
-      this.log('conn', `[${s.id}] 收到 SM_KEY，加密握手完成 baseKey=0x${b.toString(16).padStart(8, '0')}`);
+      const bk = b.toString(16).padStart(8, '0');
+      this.log('conn', L(`[${s.id}] 收到 SM_KEY，加密握手完成 baseKey=0x${bk}`, `[${s.id}] SM_KEY received, encryption handshake done, baseKey=0x${bk}`));
       return pkt;
     }
     if (!s.sk) return pkt;
     const p = decrypt(body, s.sk);
     s.sk = roll(s.sk, body.length);
     const idx = sDec(p.readUInt16LE(0));
-    if (idx === S_MESSAGE) this.log('gm', `[${s.id}] 服务器消息 "${utf16z(p.subarray(13))}"`);
+    if (idx === S_MESSAGE) { const m = utf16z(p.subarray(13)); this.log('gm', L(`[${s.id}] 服务器消息 "${m}"`, `[${s.id}] server message "${m}"`)); }
     else this.log('pkt', `[${s.id}] S->C len=${pkt.length} idx=${idx} data=${hex(p.subarray(5, 37))}`);
     return pkt;
   }

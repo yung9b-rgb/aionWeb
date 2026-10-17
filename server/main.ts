@@ -11,6 +11,7 @@ import { GmProxy } from './gmproxy.ts';
 import { ShopServer } from './shopserver.ts';
 import { ShopAgentServer } from './shopagent.ts';
 import { ShopDb, SHOP_DB } from './shopdb.ts';
+import { L, pick, errMsg, langOf, type Lang, type Msg } from './i18n.ts';
 
 const cfg = loadConfig();
 const secrets = loadSecrets();
@@ -18,7 +19,8 @@ const proxy = new GmProxy({ ...cfg.proxy, logDir: path.join(ROOT, 'data', 'proxy
 proxy.logPackets = cfg.proxy.logPackets;
 // Shop data (points, orders, catalog) and the admin log live in our own AionShop database.
 const shopDb = new ShopDb(cfg);
-let shopDbError: string | null = null;     // set if AionShop could not be created/opened at startup
+let shopDbError: Msg | null = null;     // set if AionShop could not be created/opened at startup
+const dbDown = () => L(`数据库 ${SHOP_DB} 不可用：${pick(shopDbError, 'zh')}`, `Database ${SHOP_DB} is unavailable: ${pick(shopDbError, 'en')}`);
 const shop = new ShopServer(cfg.shop.listenHost, cfg.shop.listenPort, shopDb);
 // BuyItem only carries nameId/amount/price, so goods name and duration come from the catalog we serve.
 const agent = new ShopAgentServer(cfg.shopAgent.listenHost, cfg.shopAgent.listenPort, shopDb, async (nameId, price) => {
@@ -33,9 +35,15 @@ const MIME: Record<string, string> = {
   '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.eot': 'application/vnd.ms-fontobject', '.map': 'application/json',
 };
 
+// msg may carry both languages; the response text follows the request's X-Lang.
 class HttpError extends Error {
   status: number;
-  constructor(status: number, msg: string) { super(msg); this.status = status; }
+  msg: { zh: string; en: string } | undefined;
+  constructor(status: number, msg: Msg) {
+    super(pick(msg, 'zh'));
+    this.status = status;
+    this.msg = typeof msg === 'string' ? undefined : msg;
+  }
 }
 
 function send(res: http.ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) {
@@ -69,9 +77,9 @@ const AUDIT: Record<string, string> = {
 function auditTarget(action: string, b: any): string | null {
   if (!b) return null;
   if (action === 'mail') return (Array.isArray(b.to) ? b.to.join(',') : null);
-  if (action === 'points_change') return b.accountId != null ? `账号 ${b.accountId}` : null;
+  if (action === 'points_change') return b.accountId != null ? `#${b.accountId}` : null;
   if (action === 'announce') return String(b.text ?? '').slice(0, 100);
-  if (action === 'catalog_save') return `分类 ${b.categories?.length ?? 0}、商品 ${b.goods?.length ?? 0}`;
+  if (action === 'catalog_save') return `${b.categories?.length ?? 0} / ${b.goods?.length ?? 0}`;   // categories / goods
   return null;
 }
 function audit(req: http.IncomingMessage, pathname: string, ok: boolean, message: string | null) {
@@ -103,21 +111,21 @@ route('GET', '/api/session', async (req) => ({
 }), true);
 
 route('POST', '/api/setup', async (req) => {
-  if (secrets.passwordHash) throw new HttpError(409, '管理密码已经设置过了');
+  if (secrets.passwordHash) throw new HttpError(409, L('管理密码已经设置过了', 'The admin password is already set'));
   const { password } = await readJson(req);
-  if (typeof password !== 'string' || password.length < 6) throw new HttpError(400, '密码至少 6 位');
+  if (typeof password !== 'string' || password.length < 6) throw new HttpError(400, L('密码至少 6 位', 'The password needs at least 6 characters'));
   secrets.passwordHash = hashPassword(password);
   saveSecrets(secrets);
   return { ok: true, __cookie: sessionCookie(issueToken(secrets.sessionKey)) };
 }, true);
 
 route('POST', '/api/login', async (req) => {
-  if (tooManyFailures()) throw new HttpError(429, '尝试次数过多，请 1 分钟后再试');
+  if (tooManyFailures()) throw new HttpError(429, L('尝试次数过多，请 1 分钟后再试', 'Too many attempts, try again in a minute'));
   const { password } = await readJson(req);
-  if (!secrets.passwordHash) throw new HttpError(409, '请先设置管理密码');
+  if (!secrets.passwordHash) throw new HttpError(409, L('请先设置管理密码', 'Set the admin password first'));
   if (typeof password !== 'string' || !verifyPassword(password, secrets.passwordHash)) {
     failures.push(Date.now());
-    throw new HttpError(401, '密码错误');
+    throw new HttpError(401, L('密码错误', 'Wrong password'));
   }
   return { ok: true, __cookie: sessionCookie(issueToken(secrets.sessionKey)) };
 }, true);
@@ -140,9 +148,9 @@ route('POST', '/api/announce', async (req) => {
   const category = b.category === 'E' ? 'E' : 'A';
   const raceMask = Number.isInteger(b.raceMask) ? b.raceMask : -1;
   const classMask = Number.isInteger(b.classMask) ? b.classMask : -1;
-  if (raceMask === 0 || classMask === 0) throw new HttpError(400, '至少选择一个种族和一个职业（全不选等于谁都收不到）');
+  if (raceMask === 0 || classMask === 0) throw new HttpError(400, L('至少选择一个种族和一个职业（全不选等于谁都收不到）', 'Pick at least one race and one class (selecting none reaches nobody)'));
   const rep = await announce(cfg.cached.host, cfg.cached.port, { text: String(b.text ?? ''), position, category, raceMask, classMask });
-  if (rep.result !== 0) throw new HttpError(502, `CacheD 返回错误码 ${rep.result}`);
+  if (rep.result !== 0) throw new HttpError(502, L(`CacheD 返回错误码 ${rep.result}`, `CacheD returned error code ${rep.result}`));
   return { ok: true };
 });
 
@@ -150,7 +158,7 @@ route('POST', '/api/announce', async (req) => {
 route('GET', '/api/characters', async () => listCharacters(cfg));
 route('GET', '/api/characters/(\\d+)', async (_req, _url, m) => {
   const c = await getCharacter(cfg, Number(m[1]));
-  if (!c) throw new HttpError(404, '角色不存在');
+  if (!c) throw new HttpError(404, L('角色不存在', 'Character not found'));
   return c;
 });
 
@@ -162,7 +170,7 @@ route('GET', '/api/items/info', async (_req, url) => {
   const ids = (url.searchParams.get('ids') ?? '').split(',').map(Number).filter((x) => Number.isInteger(x) && x > 0).slice(0, 2000);
   return Object.fromEntries(ids.map((id) => {
     const it = db.get(id);
-    return [id, it ? { zh: it.zh || it.name, name: it.name, max_stack: it.max_stack, quality: it.quality, level: it.level } : null];
+    return [id, it ? { zh: it.zh || it.name, en: it.en || it.name, name: it.name, max_stack: it.max_stack, quality: it.quality, level: it.level } : null];
   }));
 });
 
@@ -189,20 +197,21 @@ const proxyStatus = () => ({
   listen: `${cfg.proxy.listenHost}:${cfg.proxy.listenPort}`, target: `${cfg.proxy.targetHost}:${cfg.proxy.targetPort}`,
   logPackets: proxy.logPackets, error: proxy.lastError,
 });
-route('GET', '/api/proxy/status', async () => proxyStatus());
-route('POST', '/api/proxy/start', async () => {
-  try { await proxy.start(); } catch (e: any) { throw new HttpError(409, e.message); }
-  return proxyStatus();
+const withLang = <T extends { error: Msg | null }>(s: T, lang: Lang) => ({ ...s, error: s.error ? pick(s.error, lang) : null });
+route('GET', '/api/proxy/status', async (req) => withLang(proxyStatus(), langOf(req)));
+route('POST', '/api/proxy/start', async (req) => {
+  try { await proxy.start(); } catch (e: any) { throw new HttpError(409, errMsg(e)); }
+  return withLang(proxyStatus(), langOf(req));
 });
-route('POST', '/api/proxy/stop', async () => { await proxy.stop(); return proxyStatus(); });
+route('POST', '/api/proxy/stop', async (req) => { await proxy.stop(); return withLang(proxyStatus(), langOf(req)); });
 route('POST', '/api/proxy/options', async (req) => {
   const b = await readJson(req);
   if (typeof b.logPackets === 'boolean') proxy.logPackets = b.logPackets;
-  return proxyStatus();
+  return withLang(proxyStatus(), langOf(req));
 });
-route('GET', '/api/proxy/logs', async (_req, url) => {
+route('GET', '/api/proxy/logs', async (req, url) => {
   const since = Number(url.searchParams.get('since')) || 0;
-  const lines = proxy.logsSince(since, url.searchParams.get('all') === '1');
+  const lines = proxy.logsSince(since, url.searchParams.get('all') === '1', langOf(req));
   return { lines: lines.slice(-1000), last: lines.length ? lines[lines.length - 1].seq : since };
 });
 route('POST', '/api/proxy/clear', async () => { proxy.clearLogs(); return { ok: true }; });
@@ -210,81 +219,84 @@ route('POST', '/api/proxy/clear', async () => { proxy.clearLogs(); return { ok: 
 // ---- in-game cash shop catalog server ----
 const shopStatus = () => ({
   running: shop.running, connections: shop.connections, serverId: shop.serverId, lastSync: shop.lastSync,
-  listen: `${cfg.shop.listenHost}:${cfg.shop.listenPort}`, error: shopDbError ? `数据库 ${SHOP_DB} 不可用：${shopDbError}` : shop.lastError,
+  listen: `${cfg.shop.listenHost}:${cfg.shop.listenPort}`, error: shopDbError ? dbDown() : shop.lastError,
 });
-route('GET', '/api/shop/status', async () => shopStatus());
+route('GET', '/api/shop/status', async (req) => withLang(shopStatus(), langOf(req)));
 route('GET', '/api/shop/catalog', async () => shop.loadCatalog());
 // Server-side checks for a catalog before it replaces the old one (the game memcpy's fixed-size structs:
 // names <= 50 chars, description <= 200; ranking panel has 6 slots; the tabs + 目录 UI is two levels deep).
-function validateCatalog(b: any): string[] {
-  const errs: string[] = [];
+function validateCatalog(b: any): Msg[] {
+  const errs: Msg[] = [];
   const items = loadItems(cfg.itemsCache);
   const isInt = (v: any, lo: number, hi: number) => Number.isInteger(v) && v >= lo && v <= hi;
   const cats = new Map<number, any>();
   for (const c of b.categories) {
-    if (!isInt(c.categoryId, 1, 0x7fffffff)) { errs.push(`分类编号不对：${c.categoryId}`); continue; }
-    if (cats.has(c.categoryId)) errs.push(`分类编号重复：${c.categoryId}`);
+    if (!isInt(c.categoryId, 1, 0x7fffffff)) { errs.push(L(`分类编号不对：${c.categoryId}`, `Invalid category id: ${c.categoryId}`)); continue; }
+    if (cats.has(c.categoryId)) errs.push(L(`分类编号重复：${c.categoryId}`, `Duplicate category id: ${c.categoryId}`));
     cats.set(c.categoryId, c);
-    if (typeof c.categoryName !== 'string' || !c.categoryName.trim() || c.categoryName.length > 50) errs.push(`分类 ${c.categoryId} 的名称要 1~50 个字`);
-    if (!isInt(c.displayOrder ?? 0, -32768, 32767)) errs.push(`分类 ${c.categoryId} 的排序值不对`);
+    if (typeof c.categoryName !== 'string' || !c.categoryName.trim() || c.categoryName.length > 50) errs.push(L(`分类 ${c.categoryId} 的名称要 1~50 个字`, `Category ${c.categoryId}: the name needs 1~50 characters`));
+    if (!isInt(c.displayOrder ?? 0, -32768, 32767)) errs.push(L(`分类 ${c.categoryId} 的排序值不对`, `Category ${c.categoryId}: invalid sort order`));
   }
   for (const c of cats.values()) {
     const pid = c.parentId ?? 0;
     if (pid === 0) continue;
     const parent = cats.get(pid);
-    if (!parent) errs.push(`分类「${c.categoryName}」的上级分类 ${pid} 不存在`);
-    else if ((parent.parentId ?? 0) !== 0) errs.push(`分类「${c.categoryName}」：最多两级（页签 → 目录）`);
+    if (!parent) errs.push(L(`分类「${c.categoryName}」的上级分类 ${pid} 不存在`, `Category "${c.categoryName}": parent category ${pid} does not exist`));
+    else if ((parent.parentId ?? 0) !== 0) errs.push(L(`分类「${c.categoryName}」：最多两级（页签 → 目录）`, `Category "${c.categoryName}": at most two levels (tab → sub-category)`));
   }
   const goods = new Set<number>();
   for (const g of b.goods) {
-    const label = `商品 ${g.goodsId}「${g.goodsName ?? ''}」`;
-    if (!isInt(g.goodsId, 1, 0x7fffffff)) { errs.push(`商品编号不对：${g.goodsId}`); continue; }
-    if (goods.has(g.goodsId)) errs.push(`商品编号重复：${g.goodsId}`);
+    const label = `商品 ${g.goodsId}「${g.goodsName ?? ''}」`, labelEn = `Goods ${g.goodsId} "${g.goodsName ?? ''}"`;
+    if (!isInt(g.goodsId, 1, 0x7fffffff)) { errs.push(L(`商品编号不对：${g.goodsId}`, `Invalid goods id: ${g.goodsId}`)); continue; }
+    if (goods.has(g.goodsId)) errs.push(L(`商品编号重复：${g.goodsId}`, `Duplicate goods id: ${g.goodsId}`));
     goods.add(g.goodsId);
-    if (typeof g.goodsName !== 'string' || !g.goodsName.trim() || g.goodsName.length > 50) errs.push(`${label}：名称要 1~50 个字`);
-    if (typeof (g.desc ?? '') !== 'string' || (g.desc ?? '').length > 200) errs.push(`${label}：描述最多 200 个字`);
-    if (!isInt(g.salePrice, 0, 0x7fffffff)) errs.push(`${label}：价格要是 0 以上的整数`);
-    if (!isInt(g.itemDuration ?? 0, 0, 0x7fffffff)) errs.push(`${label}：有效期不对`);
+    if (typeof g.goodsName !== 'string' || !g.goodsName.trim() || g.goodsName.length > 50) errs.push(L(`${label}：名称要 1~50 个字`, `${labelEn}: the name needs 1~50 characters`));
+    if (typeof (g.desc ?? '') !== 'string' || (g.desc ?? '').length > 200) errs.push(L(`${label}：描述最多 200 个字`, `${labelEn}: the description can have at most 200 characters`));
+    if (!isInt(g.salePrice, 0, 0x7fffffff)) errs.push(L(`${label}：价格要是 0 以上的整数`, `${labelEn}: the price must be an integer of 0 or more`));
+    if (!isInt(g.itemDuration ?? 0, 0, 0x7fffffff)) errs.push(L(`${label}：有效期不对`, `${labelEn}: invalid duration`));
     const it = items.get(g.gameItemKey);
-    if (!it) errs.push(`${label}：物品编号 ${g.gameItemKey} 不存在`);
+    if (!it) errs.push(L(`${label}：物品编号 ${g.gameItemKey} 不存在`, `${labelEn}: item ${g.gameItemKey} does not exist`));
     const maxStack = Math.max(1, it?.max_stack ?? 1);
-    if (!isInt(g.itemAmount, 1, 0x7fff)) errs.push(`${label}：每份数量要是 1 以上的整数`);
-    else if (it && g.itemAmount > maxStack) errs.push(`${label}：每份数量 ${g.itemAmount} 超过这个物品的最大堆叠 ${maxStack}`);
+    if (!isInt(g.itemAmount, 1, 0x7fff)) errs.push(L(`${label}：每份数量要是 1 以上的整数`, `${labelEn}: the amount per unit must be an integer of 1 or more`));
+    else if (it && g.itemAmount > maxStack) errs.push(L(`${label}：每份数量 ${g.itemAmount} 超过这个物品的最大堆叠 ${maxStack}`, `${labelEn}: amount ${g.itemAmount} exceeds the item's stack limit ${maxStack}`));
     const seen = new Set<number>();
     for (const gc of g.categories ?? []) {
-      if (!cats.has(gc.categoryId)) errs.push(`${label}：分类 ${gc.categoryId} 不存在`);
-      if (seen.has(gc.categoryId)) errs.push(`${label}：重复放进分类 ${gc.categoryId}`);
+      if (!cats.has(gc.categoryId)) errs.push(L(`${label}：分类 ${gc.categoryId} 不存在`, `${labelEn}: category ${gc.categoryId} does not exist`));
+      if (seen.has(gc.categoryId)) errs.push(L(`${label}：重复放进分类 ${gc.categoryId}`, `${labelEn}: listed twice in category ${gc.categoryId}`));
       seen.add(gc.categoryId);
     }
   }
   const slots = new Set<string>();
   for (const r of b.rankings ?? []) {
-    if (!isInt(r.ranking, 1, 6)) errs.push(`推荐榜位置要在 1~6：${r.ranking}`);
+    if (!isInt(r.ranking, 1, 6)) errs.push(L(`推荐榜位置要在 1~6：${r.ranking}`, `Ranking slot must be 1~6: ${r.ranking}`));
     const k = `${r.rankingTypeCode ?? 1}:${r.ranking}`;
-    if (slots.has(k)) errs.push(`推荐榜位置 ${r.ranking} 重复`);
+    if (slots.has(k)) errs.push(L(`推荐榜位置 ${r.ranking} 重复`, `Ranking slot ${r.ranking} is used twice`));
     slots.add(k);
-    if (!goods.has(r.goodsId)) errs.push(`推荐榜位置 ${r.ranking} 的商品 ${r.goodsId} 不存在`);
+    if (!goods.has(r.goodsId)) errs.push(L(`推荐榜位置 ${r.ranking} 的商品 ${r.goodsId} 不存在`, `Ranking slot ${r.ranking}: goods ${r.goodsId} does not exist`));
   }
   return errs;
 }
 
 route('POST', '/api/shop/catalog', async (req) => {
   const b = await readJson(req);
-  if (!b || !Array.isArray(b.categories) || !Array.isArray(b.goods)) throw new HttpError(400, '目录格式不对：需要 categories 和 goods 数组');
+  if (!b || !Array.isArray(b.categories) || !Array.isArray(b.goods)) throw new HttpError(400, L('目录格式不对：需要 categories 和 goods 数组', 'Bad catalog: categories and goods arrays are required'));
   const errs = validateCatalog(b);
-  if (errs.length) throw new HttpError(400, `目录有 ${errs.length} 处问题，未保存：\n` + errs.slice(0, 20).join('\n'));
-  try { await shop.saveCatalog(b); } catch (e: any) { throw new HttpError(400, `保存失败，目录未改动：${e.message}`); }
+  if (errs.length) {
+    const list = (lang: Lang) => errs.slice(0, 20).map((x) => pick(x, lang)).join('\n');
+    throw new HttpError(400, L(`目录有 ${errs.length} 处问题，未保存：\n${list('zh')}`, `The catalog has ${errs.length} problem(s), nothing was saved:\n${list('en')}`));
+  }
+  try { await shop.saveCatalog(b); } catch (e: any) { throw new HttpError(400, L(`保存失败，目录未改动：${e.message}`, `Save failed, the catalog is unchanged: ${e.message}`)); }
   return { ok: true, notified: shop.notifyUpdate() };
 });
 route('POST', '/api/shop/push', async () => ({ ok: true, notified: shop.notifyUpdate() }));
-route('POST', '/api/shop/start', async () => {
-  if (shopDbError) throw new HttpError(409, `数据库 ${SHOP_DB} 不可用：${shopDbError}`);
-  try { await shop.start(); } catch (e: any) { throw new HttpError(409, e.message); }
-  return shopStatus();
+route('POST', '/api/shop/start', async (req) => {
+  if (shopDbError) throw new HttpError(409, dbDown());
+  try { await shop.start(); } catch (e: any) { throw new HttpError(409, errMsg(e)); }
+  return withLang(shopStatus(), langOf(req));
 });
-route('GET', '/api/shop/logs', async (_req, url) => {
+route('GET', '/api/shop/logs', async (req, url) => {
   const since = Number(url.searchParams.get('since')) || 0;
-  const lines = shop.logsSince(since);
+  const lines = shop.logsSince(since, langOf(req));
   return { lines, last: lines.length ? lines[lines.length - 1].seq : since };
 });
 
@@ -292,13 +304,13 @@ route('GET', '/api/shop/logs', async (_req, url) => {
 const agentStatus = () => ({
   running: agent.running, connections: agent.connections, serverId: agent.serverId,
   listen: `${cfg.shopAgent.listenHost}:${cfg.shopAgent.listenPort}`, db: SHOP_DB,
-  error: shopDbError ? `数据库 ${SHOP_DB} 不可用：${shopDbError}` : agent.lastError,
+  error: shopDbError ? dbDown() : agent.lastError,
 });
-route('GET', '/api/points/status', async () => agentStatus());
-route('POST', '/api/points/start', async () => {
-  if (shopDbError) throw new HttpError(409, `数据库 ${SHOP_DB} 不可用：${shopDbError}`);
-  try { await agent.start(); } catch (e: any) { throw new HttpError(409, e.message); }
-  return agentStatus();
+route('GET', '/api/points/status', async (req) => withLang(agentStatus(), langOf(req)));
+route('POST', '/api/points/start', async (req) => {
+  if (shopDbError) throw new HttpError(409, dbDown());
+  try { await agent.start(); } catch (e: any) { throw new HttpError(409, errMsg(e)); }
+  return withLang(agentStatus(), langOf(req));
 });
 route('GET', '/api/points/accounts', async () => {
   const bal = await shopDb.allBalances();
@@ -311,9 +323,10 @@ route('GET', '/api/points/accounts', async () => {
 route('POST', '/api/points/change', async (req) => {
   const b = await readJson(req);
   const accountId = Number(b.accountId), delta = Number(b.delta);
-  const reason = String(b.reason ?? '').trim().slice(0, 100) || (delta > 0 ? '后台充值' : '后台扣除');
+  const en = langOf(req) === 'en';
+  const reason = String(b.reason ?? '').trim().slice(0, 100) || (delta > 0 ? (en ? 'Admin top-up' : '后台充值') : (en ? 'Admin deduction' : '后台扣除'));
   const accountName = typeof b.accountName === 'string' && b.accountName ? b.accountName.slice(0, 32) : null;
-  try { return { ok: true, ...(await agent.change(accountId, delta, reason, accountName)) }; } catch (e: any) { throw new HttpError(400, e.message); }
+  try { return { ok: true, ...(await agent.change(accountId, delta, reason, accountName)) }; } catch (e: any) { throw new HttpError(400, errMsg(e)); }
 });
 agent.mailLookup = (o) => findCashMail(cfg, o.itemNameId, o.itemAmount, Math.floor(o.t / 1000) - 5);
 route('GET', '/api/points/orders', async () => shopDb.listOrders());
@@ -321,9 +334,9 @@ route('GET', '/api/points/history', async (_req, url) => {
   const id = url.searchParams.get('accountId');
   return shopDb.history(id ? Number(id) : undefined);
 });
-route('GET', '/api/points/logs', async (_req, url) => {
+route('GET', '/api/points/logs', async (req, url) => {
   const since = Number(url.searchParams.get('since')) || 0;
-  const lines = agent.logsSince(since);
+  const lines = agent.logsSince(since, langOf(req));
   return { lines, last: lines.length ? lines[lines.length - 1].seq : since };
 });
 
@@ -352,8 +365,10 @@ const server = http.createServer(async (req, res) => {
   if (!url.pathname.startsWith('/api/')) return serveStatic(res, url.pathname);
   const r = routes.find((x) => x.method === req.method && x.re.test(url.pathname));
   if (!r) return send(res, 404, { error: 'no such API' });
+  const lang = langOf(req, url);
+  let authed = true;
   try {
-    if (!r.open && !verifyToken(secrets.sessionKey, parseCookies(req.headers.cookie)[COOKIE])) throw new HttpError(401, '请先登录');
+    if (!r.open && !verifyToken(secrets.sessionKey, parseCookies(req.headers.cookie)[COOKIE])) { authed = false; throw new HttpError(401, L('请先登录', 'Please log in first')); }
     const out: any = await r.h(req, url, url.pathname.match(r.re)!);
     const cookie = out && typeof out === 'object' && '__cookie' in out ? out.__cookie : null;
     if (cookie) delete out.__cookie;
@@ -362,8 +377,9 @@ const server = http.createServer(async (req, res) => {
   } catch (e: any) {
     const status = e instanceof HttpError ? e.status : 500;
     if (status === 500) console.error(new Date().toISOString(), req.method, url.pathname, e);
-    if (req.method === 'POST' && status !== 401) audit(req, url.pathname, false, e?.message ?? String(e));
-    send(res, status, { error: e?.message ?? String(e) });
+    const m = errMsg(e);
+    if (req.method === 'POST' && authed) audit(req, url.pathname, false, pick(m, 'zh'));
+    send(res, status, { error: pick(m, lang) });
   }
 });
 
@@ -383,7 +399,7 @@ server.listen(cfg.listenPort, cfg.listenHost, () => {
       for (const n of await shopDb.importJson(path.join(ROOT, 'data'))) console.log(`已从 JSON 导入 ${SHOP_DB}：${n}`);
       console.log(`数据库 ${SHOP_DB} 就绪`);
     } catch (e: any) {
-      shopDbError = e.message;
+      shopDbError = errMsg(e);
       console.log(`数据库 ${SHOP_DB} 不可用，商城和点券服务不启动：${e.message}`);
       return;
     }

@@ -127,6 +127,7 @@
     </div>
   </div>
   <script src="vendors/base/vendor.bundle.base.js"></script>
+  <script src="js/i18n.js"></script>
   <script src="js/app.js"></script>
   <script src="js/off-canvas.js"></script>
   <script src="js/hoverable-collapse.js"></script>
@@ -134,18 +135,23 @@
   <script>
     let last = 0, accounts = [];
     const logBox = document.getElementById('log');
-    const fmtN = (n) => Number(n).toLocaleString('zh-CN');
+    const fmtN = AA.fmtNum;
+    // system ledger reasons are stored in Chinese; show them in the UI language (free-text notes stay as typed)
+    function reasonText(e) {
+      const m = e.kind === 'purchase' && /^购买 (.*)（订单 (\d+)）$/.exec(e.reason ?? '');
+      return m ? AA.t('购买 {0}（订单 {1}）', m[1], m[2]) : AA.t(e.reason ?? '');
+    }
     function ts(t) { const d = new Date(t), p = (n) => String(n).padStart(2, '0'); return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; }
-    const accLabel = (a) => a ? `${a.account_name ?? '账号'} (${a.account_id})` : '';
+    const accLabel = (a) => a ? `${a.account_name ?? AA.t('账号')} (${a.account_id})` : '';
 
     async function poll() {
       try {
         const [s, r] = await Promise.all([AA.api('GET', '/api/points/status'), AA.api('GET', '/api/points/logs?since=' + last)]);
-        document.getElementById('st-state').innerHTML = s.running ? '<span class="badge bg-success">运行中</span>' : '<span class="badge bg-secondary">已停止</span>';
+        document.getElementById('st-state').innerHTML = s.running ? `<span class="badge bg-success">${AA.t('运行中')}</span>` : `<span class="badge bg-secondary">${AA.t('已停止')}</span>`;
         document.getElementById('st-listen').textContent = s.listen;
         document.getElementById('st-conn').innerHTML = s.connections
-          ? `<span class="badge bg-success">已连接</span> <small class="text-muted">服务器编号 ${s.serverId ?? '–'}</small>`
-          : '<span class="badge bg-warning">未连接</span>';
+          ? `<span class="badge bg-success">${AA.t('已连接')}</span> <small class="text-muted">${AA.t('服务器编号 {0}', s.serverId ?? '–')}</small>`
+          : `<span class="badge bg-warning">${AA.t('未连接')}</span>`;
         document.getElementById('st-error').textContent = s.error || '';
         document.getElementById('btn-start').disabled = s.running;
         if (r.lines.length) {
@@ -153,7 +159,7 @@
             `<div class="aa-log-line aa-log-conn"><span class="aa-log-ts">${ts(l.t)}</span> ${AA.esc(l.text)}</div>`).join(''));
           last = r.last;
           logBox.scrollTop = logBox.scrollHeight;
-          if (r.lines.some((l) => /订单|购买/.test(l.text))) reload();
+          if (r.lines.some((l) => /订单|购买|order|buy/i.test(l.text))) reload();
         }
       } catch (e) { /* keep polling */ }
     }
@@ -166,10 +172,10 @@
       document.getElementById('acc-body').innerHTML = accounts.length ? accounts.map((a) => `
         <tr>
           <td>${AA.esc(a.account_name ?? '–')} <small class="text-muted">#${a.account_id}</small></td>
-          <td>${a.chars.map((c) => `${AA.esc(c.name)} <small class="text-muted">${c.lev}级 ${AA.RACES[c.race] ?? ''}</small>`).join('<br>') || '<span class="text-muted">–</span>'}</td>
+          <td>${a.chars.map((c) => `${AA.esc(c.name)} <small class="text-muted">${AA.t('{0}级', c.lev)} ${AA.RACES[c.race] ?? ''}</small>`).join('<br>') || '<span class="text-muted">–</span>'}</td>
           <td class="text-end aa-mono">${fmtN(a.points)}</td>
-          <td class="text-end"><button class="btn btn-sm btn-outline-primary" data-acc="${a.account_id}">选择</button></td>
-        </tr>`).join('') : '<tr><td colspan="4" class="text-muted">没有账号</td></tr>';
+          <td class="text-end"><button class="btn btn-sm btn-outline-primary" data-acc="${a.account_id}">${AA.t('选择')}</button></td>
+        </tr>`).join('') : `<tr><td colspan="4" class="text-muted">${AA.t('没有账号')}</td></tr>`;
     }
 
     async function loadHistory() {
@@ -178,22 +184,22 @@
       document.getElementById('hist-body').innerHTML = h.map((e) => `
         <tr><td class="small">${AA.fmtTime(e.t)}</td><td class="small">${AA.esc(name(e.accountId))}</td>
         <td class="text-end aa-mono ${e.delta > 0 ? 'text-success' : 'text-danger'}">${e.delta > 0 ? '+' : ''}${fmtN(e.delta)}</td>
-        <td class="text-end aa-mono">${fmtN(e.balance)}</td><td class="small">${AA.esc(e.reason)}</td></tr>`).join('')
-        || '<tr><td colspan="5" class="text-muted small">暂无</td></tr>';
+        <td class="text-end aa-mono">${fmtN(e.balance)}</td><td class="small">${AA.esc(reasonText(e))}</td></tr>`).join('')
+        || `<tr><td colspan="5" class="text-muted small">${AA.t('暂无')}</td></tr>`;
     }
 
     async function loadOrders() {
       const os = await AA.api('GET', '/api/points/orders');
       document.getElementById('order-body').innerHTML = os.map((o) => `
         <tr><td class="small">${AA.fmtTime(o.t)}</td><td class="aa-mono small">${o.warehouseId}</td>
-        <td>${AA.esc(o.charName)} <small class="text-muted">#${o.accountId}</small>${o.recipientName ? `<br><small class="text-info"><i class="mdi mdi-gift"></i> 赠送给 ${AA.esc(o.recipientName)}</small>` : ''}</td><td>${AA.esc(o.goodsName)}</td>
+        <td>${AA.esc(o.charName)} <small class="text-muted">#${o.accountId}</small>${o.recipientName ? `<br><small class="text-info"><i class="mdi mdi-gift"></i> ${AA.t('赠送给 {0}', AA.esc(o.recipientName))}</small>` : ''}</td><td>${AA.esc(o.goodsName)}</td>
         <td class="text-end">${o.itemAmount}</td><td class="text-end aa-mono">${fmtN(o.price)}</td>
-        <td>${o.status === 'delivered' ? `<span class="badge bg-success">已交付</span> <small class="text-muted">${AA.fmtTime(o.deliveredAt)}</small>`
-          : `<span class="badge bg-warning">待交付</span>${o.redelivered ? ` <small class="text-muted">已补发 ${o.redelivered} 次</small>` : ''}`}</td></tr>`).join('')
-        || '<tr><td colspan="7" class="text-muted small">暂无订单</td></tr>';
+        <td>${o.status === 'delivered' ? `<span class="badge bg-success">${AA.t('已交付')}</span> <small class="text-muted">${AA.fmtTime(o.deliveredAt)}</small>`
+          : `<span class="badge bg-warning">${AA.t('待交付')}</span>${o.redelivered ? ` <small class="text-muted">${AA.t('已补发 {0} 次', o.redelivered)}</small>` : ''}`}</td></tr>`).join('')
+        || `<tr><td colspan="7" class="text-muted small">${AA.t('暂无订单')}</td></tr>`;
     }
 
-    const reload = () => loadAccounts().then(loadHistory).then(loadOrders).catch((e) => AA.toast('读取失败：' + e.message, 'danger'));
+    const reload = () => loadAccounts().then(loadHistory).then(loadOrders).catch((e) => AA.toast(AA.t('读取失败：{0}', e.message), 'danger'));
 
     document.getElementById('acc-body').addEventListener('click', (e) => {
       const b = e.target.closest('[data-acc]');
@@ -208,18 +214,18 @@
       const accountId = Number(document.getElementById('f-acc').value);
       const delta = Number(document.getElementById('f-delta').value);
       const reason = document.getElementById('f-reason').value;
-      if (!accountId) { AA.toast('先选择账号', 'warning'); return; }
-      if (!Number.isInteger(delta) || delta === 0) { AA.toast('点数必须是非零整数', 'warning'); return; }
+      if (!accountId) { AA.toast(AA.t('先选择账号'), 'warning'); return; }
+      if (!Number.isInteger(delta) || delta === 0) { AA.toast(AA.t('点数必须是非零整数'), 'warning'); return; }
       const a = accounts.find((x) => x.account_id === accountId);
-      if (!confirm(`${delta > 0 ? '给' : '从'} ${accLabel(a)} ${delta > 0 ? '充值' : '扣除'} ${fmtN(Math.abs(delta))} 点券？`)) return;
+      if (!confirm(AA.t(delta > 0 ? '给 {0} 充值 {1} 点券？' : '从 {0} 扣除 {1} 点券？', accLabel(a), fmtN(Math.abs(delta))))) return;
       try {
         const r = await AA.api('POST', '/api/points/change', { accountId, delta, reason, accountName: a?.account_name ?? null });
-        AA.toast(`完成，余额 ${fmtN(r.balance)}` + (r.pushed ? '（已推送到游戏）' : '（主服务器未连接，下次登录生效）'));
+        AA.toast(AA.t('完成，余额 {0}', fmtN(r.balance)) + AA.t(r.pushed ? '（已推送到游戏）' : '（主服务器未连接，下次登录生效）'));
         reload();
       } catch (e) { AA.toast(e.message, 'danger'); }
     });
     document.getElementById('btn-start').addEventListener('click', async () => {
-      try { await AA.api('POST', '/api/points/start', {}); AA.toast('点券服务已启动'); } catch (e) { AA.toast('启动失败：' + e.message, 'danger'); }
+      try { await AA.api('POST', '/api/points/start', {}); AA.toast(AA.t('点券服务已启动')); } catch (e) { AA.toast(AA.t('启动失败：{0}', e.message), 'danger'); }
       poll();
     });
 

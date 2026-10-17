@@ -54,6 +54,7 @@
     </div>
   </div>
   <script src="vendors/base/vendor.bundle.base.js"></script>
+  <script src="js/i18n.js"></script>
   <script src="js/app.js"></script>
   <script src="js/off-canvas.js"></script>
   <script src="js/hoverable-collapse.js"></script>
@@ -66,24 +67,24 @@
       points_start: '启动点券服务', points_change: '点券充值/扣除',
     };
     const sel = document.getElementById('f-action');
-    sel.insertAdjacentHTML('beforeend', Object.entries(NAMES).map(([k, v]) => `<option value="${k}">${v}</option>`).join(''));
+    sel.insertAdjacentHTML('beforeend', Object.entries(NAMES).map(([k, v]) => `<option value="${k}">${AA.t(v)}</option>`).join(''));
     let rows = [];
 
     async function load() {
       const q = new URLSearchParams({ limit: document.getElementById('f-limit').value });
       if (sel.value) q.set('action', sel.value);
-      try { rows = await AA.api('GET', '/api/adminlog?' + q); } catch (e) { AA.toast('读取失败：' + e.message, 'danger'); return; }
+      try { rows = await AA.api('GET', '/api/adminlog?' + q); } catch (e) { AA.toast(AA.t('读取失败：{0}', e.message), 'danger'); return; }
       document.getElementById('body').innerHTML = rows.map((r, i) => `
         <tr>
           <td class="small text-nowrap">${AA.fmtTime(r.t)}</td>
-          <td>${AA.esc(NAMES[r.action] ?? r.action)}</td>
+          <td>${AA.esc(NAMES[r.action] ? AA.t(NAMES[r.action]) : r.action)}</td>
           <td class="small">${AA.esc(r.target ?? '')}</td>
-          <td>${r.ok ? '<span class="badge bg-success">成功</span>' : `<span class="badge bg-danger">失败</span> <small class="text-danger">${AA.esc(r.message ?? '')}</small>`}</td>
+          <td>${r.ok ? `<span class="badge bg-success">${AA.t('成功')}</span>` : `<span class="badge bg-danger">${AA.t('失败')}</span> <small class="text-danger">${AA.esc(r.message ?? '')}</small>`}</td>
           <td class="small aa-mono">${AA.esc(r.remoteAddr ?? '')}</td>
-          <td class="text-end">${r.detail ? `<button class="btn btn-sm btn-outline-secondary" data-i="${i}">详情</button>` : ''}</td>
+          <td class="text-end">${r.detail ? `<button class="btn btn-sm btn-outline-secondary" data-i="${i}">${AA.t('详情')}</button>` : ''}</td>
         </tr>
         <tr class="d-none" id="d-${i}"><td colspan="6"><pre class="aa-log mb-0" style="height:auto;max-height:320px">${AA.esc(JSON.stringify(r.detail, null, 2))}</pre></td></tr>`).join('')
-        || '<tr><td colspan="6" class="text-muted">暂无记录</td></tr>';
+        || `<tr><td colspan="6" class="text-muted">${AA.t('暂无记录')}</td></tr>`;
     }
     document.getElementById('body').addEventListener('click', (e) => {
       const b = e.target.closest('[data-i]');

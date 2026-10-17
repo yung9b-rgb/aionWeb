@@ -3,6 +3,7 @@
 //   request : u16 len (incl. itself) | u16 type (< 44) | u8 0xBC | u16 ~type | payload
 //   reply   : u16 len | u16 type | u8 0xBD | u16 ~type | u16 result (0 = ok) [| extra]
 import net from 'node:net';
+import { LError } from './i18n.ts';
 
 export const GQ = {
   ANNOUNCE: 6,
@@ -70,8 +71,8 @@ export type AnnounceArgs = {
 // Server64 RP_GM_ANNOUNCE -> UserDB::BroadcastRaceClass tests both masks per user; a 0 mask reaches nobody.
 export async function announce(host: string, port: number, a: AnnounceArgs): Promise<Reply> {
   const text = a.text.trim();
-  if (!text) throw new Error('公告内容不能为空');
-  if (text.length > 255) throw new Error('公告最多 255 个字');
+  if (!text) throw new LError('公告内容不能为空', 'The announcement text is empty');
+  if (text.length > 255) throw new LError('公告最多 255 个字', 'An announcement can have at most 255 characters');
   const tail = Buffer.alloc(8);
   tail.writeInt32LE(a.raceMask | 0, 0);
   tail.writeInt32LE(a.classMask | 0, 4);

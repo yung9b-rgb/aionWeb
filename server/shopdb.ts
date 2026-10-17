@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Config } from './config.ts';
 import { poolFor, sql } from './db.ts';
+import { LError } from './i18n.ts';
 import type { ShopCatalog, ShopGoods } from './shopserver.ts';
 
 export const SHOP_DB = 'AionShop';
@@ -400,7 +401,7 @@ export class ShopDb {
     const p = await this.pool();
     const counts = await p.request().query(`SELECT (SELECT COUNT(*) FROM dbo.account_point) a, (SELECT COUNT(*) FROM dbo.shop_order) o, (SELECT COUNT(*) FROM dbo.shop_goods) g, (SELECT COUNT(*) FROM dbo.point_ledger) l`);
     const c0 = counts.recordset[0];
-    if (c0.a || c0.o || c0.g || c0.l) throw new Error('AionShop 里已经有数据但没有导入标记，为避免重复导入已停止，请人工检查');
+    if (c0.a || c0.o || c0.g || c0.l) throw new LError('AionShop 里已经有数据但没有导入标记，为避免重复导入已停止，请人工检查', 'AionShop already has data but no import marker; stopped to avoid importing twice, please check by hand');
 
     const tx = new sql.Transaction(p);
     await tx.begin();
@@ -450,8 +451,8 @@ export class ShopDb {
           (SELECT TOP 1 balance_after FROM dbo.point_ledger l WHERE l.account_id = a.account_id ORDER BY l.created_at DESC, l.id DESC) AS last_ledger
         FROM dbo.account_point a`);
       for (const r of chk.recordset) {
-        if (Number(r.balance) !== balances[String(r.account_id)]) throw new Error(`账号 ${r.account_id} 余额导入不一致`);
-        if (r.last_ledger != null && Number(r.last_ledger) !== Number(r.balance)) throw new Error(`账号 ${r.account_id} 余额 ${r.balance} 与流水最后一条 ${r.last_ledger} 不一致`);
+        if (Number(r.balance) !== balances[String(r.account_id)]) throw new LError(`账号 ${r.account_id} 余额导入不一致`, `Account ${r.account_id}: imported balance does not match`);
+        if (r.last_ledger != null && Number(r.last_ledger) !== Number(r.balance)) throw new LError(`账号 ${r.account_id} 余额 ${r.balance} 与流水最后一条 ${r.last_ledger} 不一致`, `Account ${r.account_id}: balance ${r.balance} does not match the last ledger entry ${r.last_ledger}`);
       }
       await q().input('v', sql.NVarChar(400), new Date().toISOString()).query(`INSERT dbo.schema_meta (k, v) VALUES (N'json_import', @v)`);
       await tx.commit();

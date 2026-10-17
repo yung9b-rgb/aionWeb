@@ -220,6 +220,7 @@
   </div>
 
   <script src="vendors/base/vendor.bundle.base.js"></script>
+  <script src="js/i18n.js"></script>
   <script src="js/app.js"></script>
   <script src="js/off-canvas.js"></script>
   <script src="js/hoverable-collapse.js"></script>
@@ -228,8 +229,8 @@
   (function () {
     const $ = (id) => document.getElementById(id);
     const esc = AA.esc;
-    let cat = null, saved = '', selected = 'all', items = {};   // items: id -> {zh, max_stack, quality}
-    const QUALITY = { common: '普通', rare: '稀有', legend: '传承', unique: '独特', epic: '史诗', mythic: '神话' };
+    let cat = null, saved = '', selected = 'all', items = {};   // items: id -> {zh, en, max_stack, quality}
+    const t = AA.t, iname = (it) => AA.itemName(it) || t('未知物品');
 
     // ---------- state ----------
     const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -259,7 +260,7 @@
     const kids = (pid) => cat.categories.filter((c) => c.parentId === pid).sort((a, b) => a.displayOrder - b.displayOrder || a.categoryId - b.categoryId);
     const catById = (id) => cat.categories.find((c) => c.categoryId === id);
     const nextId = (arr, key, min) => Math.max(min, ...arr.map((x) => x[key] + 1));
-    const durText = (s) => !s ? '永久' : s % 86400 === 0 ? `${s / 86400} 天` : s % 3600 === 0 ? `${s / 3600} 小时` : `${s} 秒`;
+    const durText = (s) => !s ? t('永久') : s % 86400 === 0 ? t('{0} 天', s / 86400) : s % 3600 === 0 ? t('{0} 小时', s / 3600) : t('{0} 秒', s);
 
     // ---------- render ----------
     function render() {
@@ -280,24 +281,24 @@
         <i class="mdi ${child ? 'mdi-subdirectory-arrow-right' : 'mdi-tab'} text-muted"></i>
         <span class="sh-name ${c.enabled ? '' : 'sh-disabled'}">${esc(c.categoryName)}</span><small class="text-muted">${n}</small>
         <span class="sh-ops">
-          <button class="btn btn-light" data-op="up" data-id="${c.categoryId}" title="上移">↑</button><button class="btn btn-light" data-op="down" data-id="${c.categoryId}" title="下移">↓</button>
-          ${child ? '' : `<button class="btn btn-light" data-op="addchild" data-id="${c.categoryId}" title="添加目录">＋</button>`}
-          <button class="btn btn-light" data-op="edit" data-id="${c.categoryId}" title="编辑">✎</button><button class="btn btn-light text-danger" data-op="del" data-id="${c.categoryId}" title="删除">✕</button>
+          <button class="btn btn-light" data-op="up" data-id="${c.categoryId}" title="${t('上移')}">↑</button><button class="btn btn-light" data-op="down" data-id="${c.categoryId}" title="${t('下移')}">↓</button>
+          ${child ? '' : `<button class="btn btn-light" data-op="addchild" data-id="${c.categoryId}" title="${t('添加目录')}">＋</button>`}
+          <button class="btn btn-light" data-op="edit" data-id="${c.categoryId}" title="${t('编辑')}">✎</button><button class="btn btn-light text-danger" data-op="del" data-id="${c.categoryId}" title="${t('删除')}">✕</button>
         </span></div>`;
     }
     function renderTree() {
       const fixed = (key, icon, label) => `<div class="sh-node ${selected === key ? 'active' : ''}" data-sel="${key}"><i class="mdi ${icon} text-muted"></i><span class="sh-name">${label}</span><small class="text-muted">${goodsIn(key).length}</small></div>`;
-      $('tree').innerHTML = fixed('all', 'mdi-view-list', '全部商品')
-        + tops().map((t) => nodeHtml(t, false) + kids(t.categoryId).map((k) => nodeHtml(k, true)).join('')).join('')
-        + fixed('none', 'mdi-help-circle-outline', '未分类（游戏里看不到）')
-        + (cat.categories.length ? '' : '<p class="text-muted small mt-2">还没有页签，先点右上角「＋ 页签」。</p>');
+      $('tree').innerHTML = fixed('all', 'mdi-view-list', t('全部商品'))
+        + tops().map((x) => nodeHtml(x, false) + kids(x.categoryId).map((k) => nodeHtml(k, true)).join('')).join('')
+        + fixed('none', 'mdi-help-circle-outline', t('未分类（游戏里看不到）'))
+        + (cat.categories.length ? '' : `<p class="text-muted small mt-2">${t('还没有页签，先点右上角「＋ 页签」。')}</p>`);
     }
 
     function renderGoods() {
       const f = $('goods-filter').value.trim().toLowerCase();
       const sc = typeof selected === 'number' ? catById(selected) : null;
-      $('goods-title').textContent = selected === 'all' ? '全部商品' : selected === 'none' ? '未分类的商品' : `「${sc?.categoryName ?? ''}」里的商品`;
-      let list = goodsIn(selected).filter((g) => !f || g.goodsName.toLowerCase().includes(f) || String(g.gameItemKey).includes(f) || (items[g.gameItemKey]?.zh ?? '').toLowerCase().includes(f));
+      $('goods-title').textContent = selected === 'all' ? t('全部商品') : selected === 'none' ? t('未分类的商品') : t('「{0}」里的商品', sc?.categoryName ?? '');
+      let list = goodsIn(selected).filter((g) => !f || g.goodsName.toLowerCase().includes(f) || String(g.gameItemKey).includes(f) || (items[g.gameItemKey]?.zh ?? '').toLowerCase().includes(f) || (items[g.gameItemKey]?.en ?? '').toLowerCase().includes(f));
       if (typeof selected === 'number') {
         const ord = (g) => (g.categories.find((x) => x.categoryId === selected) ?? { displayOrder: 9999 }).displayOrder;
         list = list.slice().sort((a, b) => ord(a) - ord(b) || a.goodsId - b.goodsId);
@@ -305,19 +306,19 @@
       $('goods-body').innerHTML = list.map((g) => {
         const it = items[g.gameItemKey];
         const cats = g.categories.map((x) => { const c = catById(x.categoryId); if (!c) return ''; const p = c.parentId ? catById(c.parentId) : null;
-          return `<span class="badge bg-light text-dark me-1">${esc(p ? p.categoryName + ' › ' : '')}${esc(c.categoryName)}</span>`; }).join('') || '<span class="text-warning small">未分类</span>';
+          return `<span class="badge bg-light text-dark me-1">${esc(p ? p.categoryName + ' › ' : '')}${esc(c.categoryName)}</span>`; }).join('') || `<span class="text-warning small">${t('未分类')}</span>`;
         return `<tr class="${g.enabled ? '' : 'text-muted'}">
           <td class="aa-mono small">${g.goodsId}</td>
-          <td><div class="${g.enabled ? '' : 'sh-disabled'}">${esc(g.goodsName)}</div><small class="text-muted">${esc(it?.zh ?? '未知物品')} · ${g.gameItemKey}</small></td>
-          <td class="text-end">${g.itemAmount}${it && g.itemAmount > it.max_stack ? ' <span class="text-danger" title="超过最大堆叠">!</span>' : ''}</td>
-          <td class="text-end aa-mono">${Number(g.salePrice).toLocaleString('zh-CN')}</td>
+          <td><div class="${g.enabled ? '' : 'sh-disabled'}">${esc(g.goodsName)}</div><small class="text-muted">${esc(iname(it))} · ${g.gameItemKey}</small></td>
+          <td class="text-end">${g.itemAmount}${it && g.itemAmount > it.max_stack ? ` <span class="text-danger" title="${t('超过最大堆叠')}">!</span>` : ''}</td>
+          <td class="text-end aa-mono">${AA.fmtNum(g.salePrice)}</td>
           <td class="small">${durText(g.itemDuration)}</td>
           <td>${cats}</td>
-          <td><button class="btn btn-sm py-1 px-2 ${g.enabled ? 'btn-success' : 'btn-outline-secondary'}" data-gop="toggle" data-id="${g.goodsId}">${g.enabled ? '上架中' : '已下架'}</button></td>
-          <td class="sh-actions text-end"><button class="btn btn-sm btn-outline-primary" data-gop="edit" data-id="${g.goodsId}">编辑</button>
-            <button class="btn btn-sm btn-outline-secondary" data-gop="copy" data-id="${g.goodsId}" title="复制成新商品">复制</button>
-            <button class="btn btn-sm btn-outline-danger" data-gop="del" data-id="${g.goodsId}">删除</button></td></tr>`;
-      }).join('') || `<tr><td colspan="8" class="text-muted">这里还没有商品${selected === 'none' ? '' : '，点右上角「添加商品」'}</td></tr>`;
+          <td><button class="btn btn-sm py-1 px-2 ${g.enabled ? 'btn-success' : 'btn-outline-secondary'}" data-gop="toggle" data-id="${g.goodsId}">${t(g.enabled ? '上架中' : '已下架')}</button></td>
+          <td class="sh-actions text-end"><button class="btn btn-sm btn-outline-primary" data-gop="edit" data-id="${g.goodsId}">${t('编辑')}</button>
+            <button class="btn btn-sm btn-outline-secondary" data-gop="copy" data-id="${g.goodsId}" title="${t('复制成新商品')}">${t('复制')}</button>
+            <button class="btn btn-sm btn-outline-danger" data-gop="del" data-id="${g.goodsId}">${t('删除')}</button></td></tr>`;
+      }).join('') || `<tr><td colspan="8" class="text-muted">${t(selected === 'none' ? '这里还没有商品' : '这里还没有商品，点右上角「添加商品」')}</td></tr>`;
     }
 
     function renderRank() {
@@ -326,9 +327,9 @@
       for (let pos = 1; pos <= 6; pos++) {
         const r = cat.rankings.find((x) => (x.rankingTypeCode ?? 1) === 1 && x.ranking === pos);
         html += `<div class="sh-rank-row"><div class="sh-rank-no">${pos}</div>
-          <select class="form-control form-control-sm" data-rank="${pos}"><option value="">（空）</option>
-          ${opts.map((g) => `<option value="${g.goodsId}" ${r && r.goodsId === g.goodsId ? 'selected' : ''}>${esc(g.goodsName)}（${g.goodsId}）</option>`).join('')}
-          ${r && !opts.some((g) => g.goodsId === r.goodsId) ? `<option value="${r.goodsId}" selected>⚠ 商品 ${r.goodsId} 已下架或不存在</option>` : ''}</select>
+          <select class="form-control form-control-sm" data-rank="${pos}"><option value="">${t('（空）')}</option>
+          ${opts.map((g) => `<option value="${g.goodsId}" ${r && r.goodsId === g.goodsId ? 'selected' : ''}>${esc(g.goodsName)} (${g.goodsId})</option>`).join('')}
+          ${r && !opts.some((g) => g.goodsId === r.goodsId) ? `<option value="${r.goodsId}" selected>⚠ ${t('商品 {0} 已下架或不存在', r.goodsId)}</option>` : ''}</select>
           <button class="btn btn-sm btn-light" data-rop="up" data-pos="${pos}" ${pos === 1 ? 'disabled' : ''}>↑</button><button class="btn btn-sm btn-light" data-rop="down" data-pos="${pos}" ${pos === 6 ? 'disabled' : ''}>↓</button></div>`;
       }
       $('rank').innerHTML = html;
@@ -342,12 +343,12 @@
     let catEditing = null;   // null = new
     function catDialog(c, parentId) {
       catEditing = c;
-      $('cat-title').textContent = c ? `编辑「${c.categoryName}」` : (parentId ? '添加目录' : '添加页签');
+      $('cat-title').textContent = c ? t('编辑「{0}」', c.categoryName) : t(parentId ? '添加目录' : '添加页签');
       $('cat-name').value = c?.categoryName ?? '';
       const pid = c ? c.parentId : parentId;
       const hasKids = c && kids(c.categoryId).length;
-      $('cat-parent').innerHTML = `<option value="0">顶级页签</option>` + tops().filter((t) => !c || t.categoryId !== c.categoryId)
-        .map((t) => `<option value="${t.categoryId}" ${hasKids ? 'disabled' : ''}>「${esc(t.categoryName)}」下的目录</option>`).join('');
+      $('cat-parent').innerHTML = `<option value="0">${t('顶级页签')}</option>` + tops().filter((x) => !c || x.categoryId !== c.categoryId)
+        .map((x) => `<option value="${x.categoryId}" ${hasKids ? 'disabled' : ''}>${t('「{0}」下的目录', esc(x.categoryName))}</option>`).join('');
       $('cat-parent').value = String(pid);
       const siblings = cat.categories.filter((x) => x.parentId === pid && x !== c);
       $('cat-order').value = c ? c.displayOrder : Math.max(0, ...siblings.map((x) => x.displayOrder)) + 1;
@@ -356,7 +357,7 @@
     }
     $('cat-ok').addEventListener('click', () => {
       const name = $('cat-name').value.trim();
-      if (!name) { AA.toast('请填写名称', 'warning'); return; }
+      if (!name) { AA.toast(t('请填写名称'), 'warning'); return; }
       const v = { categoryName: name, parentId: Number($('cat-parent').value), displayOrder: Math.trunc(Number($('cat-order').value) || 0), enabled: $('cat-enabled').checked };
       if (catEditing) Object.assign(catEditing, v);
       else { const c = { categoryId: nextId(cat.categories, 'categoryId', 1), ...v }; cat.categories.push(c); selected = c.categoryId; }
@@ -366,7 +367,7 @@
     let gEditing = null, gItem = null;
     function goodsDialog(g, copy = false) {
       gEditing = copy ? null : g;
-      $('g-title').textContent = !g ? '添加商品' : copy ? `复制「${g.goodsName}」` : `编辑「${g.goodsName}」`;
+      $('g-title').textContent = !g ? t('添加商品') : copy ? t('复制「{0}」', g.goodsName) : t('编辑「{0}」', g.goodsName);
       $('g-id').value = gEditing ? g.goodsId : nextId(cat.goods, 'goodsId', 1001);
       $('g-id').disabled = !!gEditing;
       $('g-search').value = ''; $('g-results').classList.add('d-none');
@@ -383,16 +384,16 @@
       const row = (c, child) => { const s = sel.find((x) => x.categoryId === c.categoryId);
         return `<div class="row-c ${child ? 'child' : ''}"><input type="checkbox" class="form-check-input" data-cat="${c.categoryId}" ${s ? 'checked' : ''}>
           <span class="flex-fill ${c.enabled ? '' : 'sh-disabled'}">${esc(c.categoryName)}</span>
-          <input type="number" class="form-control form-control-sm" data-cord="${c.categoryId}" value="${s ? s.displayOrder : 1}" title="排序"></div>`; };
-      $('g-cats').innerHTML = tops().map((t) => row(t, false) + kids(t.categoryId).map((k) => row(k, true)).join('')).join('') || '<span class="text-muted small">还没有分类</span>';
+          <input type="number" class="form-control form-control-sm" data-cord="${c.categoryId}" value="${s ? s.displayOrder : 1}" title="${t('排序')}"></div>`; };
+      $('g-cats').innerHTML = tops().map((x) => row(x, false) + kids(x.categoryId).map((k) => row(k, true)).join('')).join('') || `<span class="text-muted small">${t('还没有分类')}</span>`;
       openDlg('dlg-goods'); setTimeout(() => (g ? $('g-name') : $('g-search')).focus(), 50);
     }
     function setItem(id) {
       gItem = id;
       const it = id ? items[id] : null;
-      $('g-item').innerHTML = !id ? '<span class="text-warning">还没选物品</span>'
-        : `已选：<b>${esc(it?.zh ?? '未知物品')}</b> <span class="aa-mono">${id}</span> ${it ? `· ${QUALITY[it.quality?.toLowerCase()] ?? it.quality ?? ''} · 最大堆叠 ${it.max_stack}` : ''}`;
-      $('g-maxstack').textContent = it ? `（最多 ${Math.max(1, it.max_stack)}）` : '';
+      $('g-item').innerHTML = !id ? `<span class="text-warning">${t('还没选物品')}</span>`
+        : `${t('已选：')}<b>${esc(iname(it))}</b> <span class="aa-mono">${id}</span> ${it ? `· ${AA.quality(it.quality)} · ${t('最大堆叠 {0}', it.max_stack)}` : ''}`;
+      $('g-maxstack').textContent = it ? t('（最多 {0}）', Math.max(1, it.max_stack)) : '';
       $('g-amount').max = it ? Math.max(1, it.max_stack) : '';
     }
     const descCount = () => { $('g-desc-n').textContent = `${$('g-desc').value.length}/200`; };
@@ -405,9 +406,9 @@
       if (!q) { $('g-results').classList.add('d-none'); return; }
       searchTimer = setTimeout(async () => {
         const rs = await AA.api('GET', '/api/items?q=' + encodeURIComponent(q)).catch(() => []);
-        for (const r of rs) items[r.id] = { zh: r.zh || r.name, name: r.name, max_stack: r.max_stack, quality: r.quality, level: r.level };
-        $('g-results').innerHTML = rs.map((r) => `<div data-item="${r.id}"><b>${esc(r.zh || r.name)}</b> <span class="aa-mono text-muted">${r.id}</span>
-          <small class="text-muted">· ${QUALITY[r.quality?.toLowerCase()] ?? r.quality} · ${r.level} 级 · 堆叠 ${r.max_stack}</small></div>`).join('') || '<div class="text-muted">没找到</div>';
+        for (const r of rs) items[r.id] = { zh: r.zh || r.name, en: r.en || r.name, name: r.name, max_stack: r.max_stack, quality: r.quality, level: r.level };
+        $('g-results').innerHTML = rs.map((r) => `<div data-item="${r.id}"><b>${esc(iname(items[r.id]))}</b> <span class="aa-mono text-muted">${r.id}</span>
+          <small class="text-muted">· ${AA.quality(r.quality)} · ${t('{0} 级', r.level)} · ${t('堆叠 {0}', r.max_stack)}</small></div>`).join('') || `<div class="text-muted">${t('没找到')}</div>`;
         $('g-results').classList.remove('d-none');
       }, 250);
     });
@@ -423,10 +424,10 @@
       const name = $('g-name').value.trim(), amount = Math.trunc(Number($('g-amount').value)), price = Number($('g-price').value);
       const unit = Number($('g-dur-unit').value), dur = unit ? Math.trunc(Number($('g-dur').value) * unit) : 0;
       const it = items[gItem];
-      const err = !gItem ? '请先选择物品' : !name ? '请填写商品名' : name.length > 50 ? '商品名最多 50 字'
-        : !(id > 0) ? '商品编号要是正整数' : !gEditing && cat.goods.some((g) => g.goodsId === id) ? `商品编号 ${id} 已被占用`
-        : !(amount >= 1) ? '每份数量至少 1' : it && amount > Math.max(1, it.max_stack) ? `这个物品最多堆叠 ${it.max_stack} 个`
-        : !Number.isInteger(price) || price < 0 ? '价格要是 0 以上的整数' : unit && !(dur > 0) ? '请填写有效期' : null;
+      const err = !gItem ? t('请先选择物品') : !name ? t('请填写商品名') : name.length > 50 ? t('商品名最多 50 字')
+        : !(id > 0) ? t('商品编号要是正整数') : !gEditing && cat.goods.some((g) => g.goodsId === id) ? t('商品编号 {0} 已被占用', id)
+        : !(amount >= 1) ? t('每份数量至少 1') : it && amount > Math.max(1, it.max_stack) ? t('这个物品最多堆叠 {0} 个', it.max_stack)
+        : !Number.isInteger(price) || price < 0 ? t('价格要是 0 以上的整数') : unit && !(dur > 0) ? t('请填写有效期') : null;
       if (err) { AA.toast(err, 'warning'); return; }
       const cats = [...$('g-cats').querySelectorAll('[data-cat]:checked')].map((cb) => ({ categoryId: Number(cb.dataset.cat),
         displayOrder: Math.trunc(Number($('g-cats').querySelector(`[data-cord="${cb.dataset.cat}"]`).value) || 0) }));
@@ -435,7 +436,7 @@
       if (gEditing) Object.assign(gEditing, v);
       else cat.goods.push({ goodsId: id, priceCategory: 1, priceId: 1, saleEnableQuantity: 9999, saleStatusCode: 1, itemTypeCode: 0,
         goodsIconKey: 0, goodsIconBitSet: 0, availStart: 0, availEnd: 0, ...v });
-      if (!cats.length) AA.toast('这个商品没有放进任何分类，游戏里看不到它', 'warning');
+      if (!cats.length) AA.toast(t('这个商品没有放进任何分类，游戏里看不到它'), 'warning');
       closeDlg('dlg-goods'); changed();
     });
 
@@ -456,7 +457,7 @@
         } else if (op.dataset.op === 'del') {
           const ch = kids(c.categoryId), ids = new Set([c.categoryId, ...ch.map((k) => k.categoryId)]);
           const n = cat.goods.filter((g) => g.categories.some((x) => ids.has(x.categoryId))).length;
-          if (!confirm(`删除「${c.categoryName}」${ch.length ? `和它下面的 ${ch.length} 个目录` : ''}？\n${n ? `${n} 个商品会从这里移出（商品本身不删）。` : ''}`)) return;
+          if (!confirm(t(ch.length ? '删除「{0}」和它下面的 {1} 个目录？' : '删除「{0}」？', c.categoryName, ch.length) + (n ? '\n' + t('{0} 个商品会从这里移出（商品本身不删）。', n) : ''))) return;
           cat.categories = cat.categories.filter((x) => !ids.has(x.categoryId));
           for (const g of cat.goods) g.categories = g.categories.filter((x) => !ids.has(x.categoryId));
           if (ids.has(selected)) selected = 'all';
@@ -478,7 +479,7 @@
       else if (b.dataset.gop === 'toggle') { g.enabled = !g.enabled; changed(); }
       else if (b.dataset.gop === 'del') {
         const inRank = cat.rankings.some((r) => r.goodsId === g.goodsId);
-        if (!confirm(`删除商品「${g.goodsName}」？${inRank ? '\n它也会从推荐榜里移除。' : ''}\n（已经卖出的订单记录不受影响）`)) return;
+        if (!confirm(t('删除商品「{0}」？', g.goodsName) + (inRank ? '\n' + t('它也会从推荐榜里移除。') : '') + '\n' + t('（已经卖出的订单记录不受影响）'))) return;
         cat.goods = cat.goods.filter((x) => x !== g);
         cat.rankings = cat.rankings.filter((r) => r.goodsId !== g.goodsId);
         cat.promotions = cat.promotions.filter((r) => r.goodsId !== g.goodsId);
@@ -503,25 +504,25 @@
 
     $('btn-save').addEventListener('click', async () => {
       const uncat = cat.goods.filter((g) => g.enabled && !g.categories.length).length;
-      if (uncat && !confirm(`有 ${uncat} 个上架商品没有分类，游戏里看不到。仍然保存？`)) return;
+      if (uncat && !confirm(t('有 {0} 个上架商品没有分类，游戏里看不到。仍然保存？', uncat))) return;
       $('btn-save').disabled = true;
       try {
         const r = await AA.api('POST', '/api/shop/catalog', cat);
         saved = JSON.stringify(cat); changed();
-        AA.toast(r.notified ? `已保存，并通知 ${r.notified} 个主服务器重新拉取。游戏里重新打开商城即可看到。` : '已保存（主服务器未连接，连上后会自动拉取）');
+        AA.toast(r.notified ? t('已保存，并通知 {0} 个主服务器重新拉取。游戏里重新打开商城即可看到。', r.notified) : t('已保存（主服务器未连接，连上后会自动拉取）'));
       } catch (e) { AA.toast(e.message, 'danger'); }
       finally { $('btn-save').disabled = false; }
     });
-    $('btn-revert').addEventListener('click', async () => { if (!isDirty() || confirm('放弃所有未保存的改动？')) await load(); });
+    $('btn-revert').addEventListener('click', async () => { if (!isDirty() || confirm(t('放弃所有未保存的改动？'))) await load(); });
 
     $('json-toggle').addEventListener('click', (e) => {
       e.preventDefault(); $('json-box').classList.toggle('d-none');
       if (!$('json-box').classList.contains('d-none')) $('json').value = JSON.stringify(cat, null, 2);
     });
     $('btn-json-apply').addEventListener('click', async () => {
-      let c; try { c = JSON.parse($('json').value); } catch (e) { AA.toast('JSON 格式错误：' + e.message, 'danger'); return; }
-      if (!Array.isArray(c.categories) || !Array.isArray(c.goods)) { AA.toast('需要 categories 和 goods 数组', 'danger'); return; }
-      cat = normalize(c); await fetchItems(cat.goods.map((g) => g.gameItemKey)); changed(); AA.toast('已应用到编辑器，记得保存');
+      let c; try { c = JSON.parse($('json').value); } catch (e) { AA.toast(t('JSON 格式错误：{0}', e.message), 'danger'); return; }
+      if (!Array.isArray(c.categories) || !Array.isArray(c.goods)) { AA.toast(t('需要 categories 和 goods 数组'), 'danger'); return; }
+      cat = normalize(c); await fetchItems(cat.goods.map((g) => g.gameItemKey)); changed(); AA.toast(t('已应用到编辑器，记得保存'));
     });
 
     // ---------- status + logs ----------
@@ -531,9 +532,9 @@
     async function poll() {
       try {
         const [s, r] = await Promise.all([AA.api('GET', '/api/shop/status'), AA.api('GET', '/api/shop/logs?since=' + last)]);
-        $('st-state').innerHTML = s.running ? '<span class="badge bg-success">运行中</span>' : '<span class="badge bg-secondary">已停止</span>';
+        $('st-state').innerHTML = s.running ? `<span class="badge bg-success">${t('运行中')}</span>` : `<span class="badge bg-secondary">${t('已停止')}</span>`;
         $('st-listen').textContent = s.listen;
-        $('st-conn').innerHTML = s.connections ? `<span class="badge bg-success">已连接</span> <small class="text-muted">服务器编号 ${s.serverId ?? '–'}</small>` : '<span class="badge bg-warning">未连接</span>';
+        $('st-conn').innerHTML = s.connections ? `<span class="badge bg-success">${t('已连接')}</span> <small class="text-muted">${t('服务器编号 {0}', s.serverId ?? '–')}</small>` : `<span class="badge bg-warning">${t('未连接')}</span>`;
         $('st-sync').textContent = s.lastSync ? AA.fmtTime(s.lastSync) : '–';
         $('st-error').textContent = s.error || '';
         $('btn-start').disabled = s.running;
@@ -544,13 +545,13 @@
         }
       } catch (e) { /* keep polling */ }
     }
-    $('btn-push').addEventListener('click', async () => { const r = await AA.api('POST', '/api/shop/push', {}); AA.toast(`已通知 ${r.notified} 个主服务器重新拉取目录`); });
+    $('btn-push').addEventListener('click', async () => { const r = await AA.api('POST', '/api/shop/push', {}); AA.toast(t('已通知 {0} 个主服务器重新拉取目录', r.notified)); });
     $('btn-start').addEventListener('click', async () => {
-      try { await AA.api('POST', '/api/shop/start', {}); AA.toast('商城服务器已启动'); } catch (e) { AA.toast('启动失败：' + e.message, 'danger'); }
+      try { await AA.api('POST', '/api/shop/start', {}); AA.toast(t('商城服务器已启动')); } catch (e) { AA.toast(t('启动失败：{0}', e.message), 'danger'); }
       poll();
     });
 
-    load().catch((e) => AA.toast('读取目录失败：' + e.message, 'danger'));
+    load().catch((e) => AA.toast(t('读取目录失败：{0}', e.message), 'danger'));
     poll(); setInterval(poll, 2000);
   })();
   </script>

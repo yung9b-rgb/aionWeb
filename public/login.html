@@ -39,6 +39,7 @@
     </div>
   </div>
   <script src="vendors/base/vendor.bundle.base.js"></script>
+  <script src="js/i18n.js"></script>
   <script src="js/app.js"></script>
   <script>
     (async function () {
@@ -46,11 +47,11 @@
       if (s.authed) { location.href = 'index.html'; return; }
       const setup = s.needsSetup;
       if (setup) {
-        document.getElementById('title').textContent = '首次使用：设置管理密码';
-        document.getElementById('subtitle').textContent = '密码至少 6 位，只保存在本机（加盐哈希）';
+        document.getElementById('title').textContent = AA.t('首次使用：设置管理密码');
+        document.getElementById('subtitle').textContent = AA.t('密码至少 6 位，只保存在本机（加盐哈希）');
         document.getElementById('pw2-group').classList.remove('d-none');
         document.getElementById('pw').setAttribute('autocomplete', 'new-password');
-        document.getElementById('btn').textContent = '设置并进入';
+        document.getElementById('btn').textContent = AA.t('设置并进入');
       }
       document.getElementById('form').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -59,7 +60,7 @@
         err.textContent = '';
         try {
           if (setup) {
-            if (pw !== document.getElementById('pw2').value) throw new Error('两次输入的密码不一致');
+            if (pw !== document.getElementById('pw2').value) throw new Error(AA.t('两次输入的密码不一致'));
             await AA.api('POST', '/api/setup', { password: pw });
           } else {
             await AA.api('POST', '/api/login', { password: pw });

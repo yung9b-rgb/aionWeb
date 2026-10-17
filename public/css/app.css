@@ -41,3 +41,13 @@ select.form-control, .dataTables_wrapper select { color: #212529 !important; }
 .aa-log-err, .aa-log-err .aa-log-cat { color: #ff6b6b; }
 .aa-log-pkt { color: #9a9ab0; }
 .aa-proxy-stats span { font-weight: 600; }
+/* Language switcher (top right of the navbar; floating on the login page) */
+.aa-lang { position: relative; }
+.aa-lang-menu { display: none; position: absolute; right: 0; top: 100%; min-width: 130px; background: #fff; border-radius: 6px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .15); padding: 6px 0; z-index: 1100; }
+.aa-lang-menu.show { display: block; }
+.aa-lang-menu a { display: block; padding: 6px 16px; color: #212529; text-decoration: none; white-space: nowrap; }
+.aa-lang-menu a:hover { background: #f2f4ff; }
+.aa-lang-menu a.active { font-weight: 700; color: #4d83ff; }
+.aa-lang-float { position: fixed; top: 14px; right: 20px; z-index: 1100; }
+.aa-lang-float .nav-link { display: inline-block; padding: 6px 12px; background: #fff; border-radius: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, .08); color: #212529; text-decoration: none; }

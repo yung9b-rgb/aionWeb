@@ -11,6 +11,7 @@
 // ShopRankingInfo 0x20, ShopPromotionInfo 0x28); wchar arrays are sized in BYTES (goodsName 102 B = 50 chars + NUL).
 import net from 'node:net';
 import type { ShopDb } from './shopdb.ts';
+import { L, pick, type Lang, type Msg } from './i18n.ts';
 
 const MARK_IN = 0xdc, MARK_OUT = 0xdd;
 const T = { CONNECT_RESULT: 0, NOTIFY_UPDATE: 1, UPDATE_START: 2, GOODS: 3, CATEGORY: 4, GOODS_CATEGORY: 5, RANKING: 6, PROMOTION: 7, UPDATE_END: 9 };
@@ -135,7 +136,7 @@ function listPackets(type: number, seq: number, structs: Buffer[]): Buffer[] {
   return out;
 }
 
-export type ShopLog = { seq: number; t: number; text: string };
+export type ShopLog = { seq: number; t: number; text: Msg };
 
 export class ShopServer {
   host: string; port: number;
@@ -144,7 +145,7 @@ export class ShopServer {
   private conns = new Set<net.Socket>();
   private logs: ShopLog[] = [];
   private logSeq = 0;
-  lastError: string | null = null;
+  lastError: Msg | null = null;
   lastSync: number | null = null;
   serverId: number | null = null;
 
@@ -155,11 +156,11 @@ export class ShopServer {
   get running() { return !!this.server?.listening; }
   get connections() { return this.conns.size; }
 
-  log(text: string) {
+  log(text: Msg) {
     this.logs.push({ seq: ++this.logSeq, t: Date.now(), text });
     if (this.logs.length > 500) this.logs.shift();
   }
-  logsSince(since: number) { return this.logs.filter((l) => l.seq > since); }
+  logsSince(since: number, lang: Lang = 'zh') { return this.logs.filter((l) => l.seq > since).map((l) => ({ ...l, text: pick(l.text, lang) })); }
 
   // The catalog lives in AionShop (shop_category / shop_goods / shop_goods_category / shop_ranking / shop_promotion).
   loadCatalog(): Promise<ShopCatalog> { return this.db.loadCatalog(); }
@@ -182,13 +183,13 @@ export class ShopServer {
     return new Promise((resolve, reject) => {
       const srv = net.createServer((s) => this.onConn(s));
       srv.once('error', (e: NodeJS.ErrnoException) => {
-        this.lastError = e.code === 'EADDRINUSE' ? `端口 ${this.port} 已被占用` : e.message;
-        this.log(`启动失败：${this.lastError}`);
-        reject(new Error(this.lastError));
+        this.lastError = e.code === 'EADDRINUSE' ? L(`端口 ${this.port} 已被占用`, `Port ${this.port} is already in use`) : e.message;
+        this.log(L(`启动失败：${pick(this.lastError, 'zh')}`, `Start failed: ${pick(this.lastError, 'en')}`));
+        reject(Object.assign(new Error(pick(this.lastError, 'zh')), { msg: typeof this.lastError === 'string' ? { zh: this.lastError, en: this.lastError } : this.lastError }));
       });
       srv.listen(this.port, this.host, () => {
         this.server = srv; this.lastError = null;
-        this.log(`商城服务器已启动 ${this.host}:${this.port}，等待主服务器连接`);
+        this.log(L(`商城服务器已启动 ${this.host}:${this.port}，等待主服务器连接`, `Shop server started on ${this.host}:${this.port}, waiting for the main server`));
         resolve();
       });
     });
@@ -197,41 +198,41 @@ export class ShopServer {
   // Tell every connected Server64 the catalog changed: it answers with RequestData and we resend everything.
   notifyUpdate(): number {
     for (const s of this.conns) s.write(packet(T.NOTIFY_UPDATE));
-    this.log(`已通知 ${this.conns.size} 个主服务器重新拉取目录`);
+    this.log(L(`已通知 ${this.conns.size} 个主服务器重新拉取目录`, `Told ${this.conns.size} main server(s) to fetch the catalog again`));
     return this.conns.size;
   }
 
   private onConn(s: net.Socket) {
     this.conns.add(s);
-    this.log(`主服务器已连接 ${s.remoteAddress}:${s.remotePort}`);
+    this.log(L(`主服务器已连接 ${s.remoteAddress}:${s.remotePort}`, `Main server connected from ${s.remoteAddress}:${s.remotePort}`));
     let buf = Buffer.alloc(0);
     s.on('data', (d) => {
       buf = Buffer.concat([buf, d]);
       while (buf.length >= 2) {
         const len = buf.readUInt16LE(0);
-        if (len < 5 || buf.length < len) { if (len < 5 && buf.length >= 2) { this.log(`异常包长度 ${len}，断开`); s.destroy(); } break; }
+        if (len < 5 || buf.length < len) { if (len < 5 && buf.length >= 2) { this.log(L(`异常包长度 ${len}，断开`, `Bad packet length ${len}, disconnecting`)); s.destroy(); } break; }
         const p = buf.subarray(0, len);
         buf = buf.subarray(len);
         this.onPacket(s, p);
       }
     });
-    const bye = (why: string) => { if (this.conns.delete(s)) this.log(`主服务器连接断开：${why}`); };
-    s.on('close', () => bye('关闭'));
+    const bye = (why: Msg) => { if (this.conns.delete(s)) this.log(L(`主服务器连接断开：${pick(why, 'zh')}`, `Main server disconnected: ${pick(why, 'en')}`)); };
+    s.on('close', () => bye(L('关闭', 'closed')));
     s.on('error', (e) => bye(e.message));
   }
 
   private onPacket(s: net.Socket, p: Buffer) {
     const type = p[2], mark = p[3], inv = p[4];
-    if (mark !== MARK_IN || (inv ^ 0xff) !== type) { this.log(`包头不对 type=${type} mark=${mark.toString(16)}，忽略`); return; }
+    if (mark !== MARK_IN || (inv ^ 0xff) !== type) { this.log(L(`包头不对 type=${type} mark=${mark.toString(16)}，忽略`, `Bad packet header type=${type} mark=${mark.toString(16)}, ignored`)); return; }
     if (type === 0) {
       this.serverId = p.length >= 9 ? p.readInt32LE(5) : null;
-      this.log(`收到握手（服务器编号 ${this.serverId}），回复握手结果`);
+      this.log(L(`收到握手（服务器编号 ${this.serverId}），回复握手结果`, `Handshake received (server ${this.serverId}), answered`));
       s.write(packet(T.CONNECT_RESULT, Buffer.from([0])));
     } else if (type === 1) {
       const seq = p.readUInt32LE(5);
-      this.sendCatalog(s, seq).catch((e) => this.log(`读取目录失败：${e.message}`));
+      this.sendCatalog(s, seq).catch((e) => this.log(L(`读取目录失败：${e.message}`, `Reading the catalog failed: ${e.message}`)));
     } else {
-      this.log(`收到未知类型 ${type}，忽略`);
+      this.log(L(`收到未知类型 ${type}，忽略`, `Unknown packet type ${type}, ignored`));
     }
   }
 
@@ -249,6 +250,8 @@ export class ShopServer {
     ];
     s.write(Buffer.concat(pkts));
     this.lastSync = Date.now();
-    this.log(`收到请求数据（序号 ${seq}），已发送 分类 ${cat.categories.length}、商品 ${cat.goods.length}、对应 ${gc.length}、排行 ${(cat.rankings ?? []).length}、推荐 ${(cat.promotions ?? []).length}（共 ${pkts.length} 个包）`);
+    const nc = cat.categories.length, ng = cat.goods.length, nr = (cat.rankings ?? []).length, np = (cat.promotions ?? []).length;
+    this.log(L(`收到请求数据（序号 ${seq}），已发送 分类 ${nc}、商品 ${ng}、对应 ${gc.length}、排行 ${nr}、推荐 ${np}（共 ${pkts.length} 个包）`,
+      `Catalog requested (seq ${seq}): sent ${nc} categories, ${ng} goods, ${gc.length} links, ${nr} rankings, ${np} promotions (${pkts.length} packets)`));
   }
 }

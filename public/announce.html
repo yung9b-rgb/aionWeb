@@ -97,6 +97,7 @@
     </div>
   </div>
   <script src="vendors/base/vendor.bundle.base.js"></script>
+  <script src="js/i18n.js"></script>
   <script src="js/app.js"></script>
   <script src="js/off-canvas.js"></script>
   <script src="js/hoverable-collapse.js"></script>
@@ -128,14 +129,14 @@
       btn.disabled = true;
       try {
         await AA.api('POST', '/api/announce', body);
-        AA.toast('公告已广播');
+        AA.toast(AA.t('公告已广播'));
         history.unshift({ t: new Date(), ...body });
         document.getElementById('history').innerHTML = history.slice(0, 20).map((h) =>
           `<li class="mb-2"><span class="text-muted">${AA.fmtTime(h.t).slice(11)}</span>
-           <span class="badge bg-${h.position === 'M' ? 'primary' : 'secondary'}">${h.position === 'M' ? '屏幕中央' : '聊天窗口'}</span>
-           ${AA.esc(h.text)}</li>`).join('');
+           <span class="badge bg-${h.position === 'M' ? 'primary' : 'secondary'}">${AA.t(h.position === 'M' ? '屏幕中央' : '聊天窗口')}</span>
+           <span data-no-i18n>${AA.esc(h.text)}</span></li>`).join('');
       } catch (ex) {
-        AA.toast('发送失败：' + ex.message, 'danger');
+        AA.toast(AA.t('发送失败：{0}', ex.message), 'danger');
       } finally {
         btn.disabled = false;
       }

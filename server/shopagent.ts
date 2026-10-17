@@ -35,6 +35,7 @@
 // GetItemsForServer. A buy is one DB transaction keyed on a unique request key, so it can't be charged twice.
 import net from 'node:net';
 import type { ShopDb, ShopOrder } from './shopdb.ts';
+import { L, LError, pick, type Lang, type Msg } from './i18n.ts';
 
 const T = { VERSION: 0x00, BUY: 0x0c, GET_ITEMS: 0x14, DELETE_ITEMS: 0x17, GET_POINT: 0x1a, POINT_CHANGE: 0x1b };
 const PROTOCOL_VERSION = 0x1b;
@@ -50,7 +51,7 @@ function packet(type: number, payload: Buffer = Buffer.alloc(0)): Buffer {
   return Buffer.concat([h, payload]);
 }
 
-export type AgentLog = { seq: number; t: number; text: string };
+export type AgentLog = { seq: number; t: number; text: Msg };
 // After Server64 confirms delivery: who actually got the cash-item mail (the BuyItem packet has no recipient).
 export type MailLookup = (o: ShopOrder) => Promise<{ charId: number; name: string } | null>;
 // Looks up catalog info for an item the server is buying (the BuyItem packet carries only nameId/amount/price).
@@ -74,7 +75,7 @@ export class ShopAgentServer {
   private logSeq = 0;
   private lookup: GoodsLookup;
   mailLookup: MailLookup | null = null;
-  lastError: string | null = null;
+  lastError: Msg | null = null;
   serverId: number | null = null;
 
   constructor(host: string, port: number, db: ShopDb, lookup: GoodsLookup = async () => null) {
@@ -84,23 +85,25 @@ export class ShopAgentServer {
   get running() { return !!this.server?.listening; }
   get connections() { return this.conns.size; }
 
-  log(text: string) {
+  log(text: Msg) {
     this.logs.push({ seq: ++this.logSeq, t: Date.now(), text });
     if (this.logs.length > 500) this.logs.shift();
   }
-  logsSince(since: number) { return this.logs.filter((l) => l.seq > since); }
+  logsSince(since: number, lang: Lang = 'zh') { return this.logs.filter((l) => l.seq > since).map((l) => ({ ...l, text: pick(l.text, lang) })); }
 
   // ---------- points ----------
 
   // Add (or with a negative delta, take) points from the admin. Committed first, then pushed to Server64 so an
   // online player sees it immediately; an offline account picks it up on its next login (GetPoint).
   async change(accountId: number, delta: number, reason: string, accountName: string | null = null): Promise<{ balance: number; pushed: number }> {
-    if (!Number.isInteger(accountId) || accountId <= 0) throw new Error('账号编号不对');
-    if (!Number.isSafeInteger(delta) || delta === 0) throw new Error('点数必须是非零整数');
+    if (!Number.isInteger(accountId) || accountId <= 0) throw new LError('账号编号不对', 'Invalid account id');
+    if (!Number.isSafeInteger(delta) || delta === 0) throw new LError('点数必须是非零整数', 'Points must be a non-zero integer');
     const r = await this.db.changePoints(accountId, delta, delta > 0 ? 'topup' : 'deduct', 'admin', reason, accountName);
-    if (!r.ok) throw new Error(`余额不足：当前 ${r.balance}`);
+    if (!r.ok) throw new LError(`余额不足：当前 ${r.balance}`, `Not enough points: balance is ${r.balance}`);
     const pushed = this.pushBalance(accountId, delta, r.balance);
-    this.log(`账号 ${accountId} 点券 ${delta > 0 ? '+' : ''}${delta} → ${r.balance}（${reason}）${pushed ? '，已推送到游戏' : '，主服务器未连接，下次登录生效'}`);
+    const d = `${delta > 0 ? '+' : ''}${delta}`;
+    this.log(L(`账号 ${accountId} 点券 ${d} → ${r.balance}（${reason}）${pushed ? '，已推送到游戏' : '，主服务器未连接，下次登录生效'}`,
+      `Account ${accountId} points ${d} → ${r.balance} (${reason})${pushed ? ', pushed to the game' : '; main server not connected, applies at next login'}`));
     return { balance: r.balance, pushed };
   }
 
@@ -122,11 +125,11 @@ export class ShopAgentServer {
       s.write(packet(T.BUY, b));
     };
     const info = await this.lookup(itemNameId, price).catch(() => null);
-    const goodsName = info?.goodsName ?? `物品 ${itemNameId}`;
-    const who = `${charName || '?'}（账号 ${accountId}）`;
+    const goodsName = info?.goodsName ?? `#${itemNameId}`;
+    const who = `${charName || '?'} (#${accountId})`;
     if (!Number.isSafeInteger(price) || price < 0 || itemAmount < 1 || n < 1) {
       reply(BUY_FAILED);
-      this.log(`购买请求数据异常：${who} ${goodsName} 价格 ${price} 数量 ${itemAmount}，已拒绝`);
+      this.log(L(`购买请求数据异常：${who} ${goodsName} 价格 ${price} 数量 ${itemAmount}，已拒绝`, `Malformed buy request: ${who} ${goodsName} price ${price} amount ${itemAmount}, refused`));
       return;
     }
     let r;
@@ -136,29 +139,30 @@ export class ShopAgentServer {
         goodsId: info?.goodsId ?? null, goodsName });
     } catch (e: any) {
       reply(BUY_FAILED);
-      this.log(`${who} 购买 ${goodsName}：数据库出错，已回复失败（${e.message}）`);
+      this.log(L(`${who} 购买 ${goodsName}：数据库出错，已回复失败（${e.message}）`, `${who} buying ${goodsName}: database error, answered failure (${e.message})`));
       return;
     }
     if (r.result === 'nocash') {
       reply(BUY_NOT_ENOUGH_CASH);
-      this.log(`${who} 购买 ${goodsName}：点券不足（需要 ${price}，持有 ${r.balance}）`);
+      this.log(L(`${who} 购买 ${goodsName}：点券不足（需要 ${price}，持有 ${r.balance}）`, `${who} buying ${goodsName}: not enough points (needs ${price}, has ${r.balance})`));
       return;
     }
     if (r.result === 'dup') {
       reply(0, r.orderId!);
-      this.log(`${who} 的购买请求重复（交易号 ${txid}），按原订单 ${r.orderId} 回复，未重复扣点券`);
+      this.log(L(`${who} 的购买请求重复（交易号 ${txid}），按原订单 ${r.orderId} 回复，未重复扣点券`, `${who}: duplicate buy request (tx ${txid}), answered with order ${r.orderId}, not charged again`));
       return;
     }
     if (price > 0) this.pushBalance(accountId, -price, r.balance);
     reply(0, r.orderId!);
-    this.log(`${who} 购买 ${goodsName} ×${itemAmount}，扣 ${price} 点券（余额 ${r.balance}），订单 ${r.orderId}，等待主服务器发邮件`);
+    this.log(L(`${who} 购买 ${goodsName} ×${itemAmount}，扣 ${price} 点券（余额 ${r.balance}），订单 ${r.orderId}，等待主服务器发邮件`,
+      `${who} bought ${goodsName} ×${itemAmount} for ${price} points (balance ${r.balance}), order ${r.orderId}, waiting for the main server to mail it`));
   }
 
   private async onDelivered(d: Buffer) {
     const n = Math.min(d.readUInt32LE(4), Math.floor((d.length - 8) / 8));
     const ids = Array.from({ length: n }, (_, i) => Number(d.readBigUInt64LE(8 + i * 8)));
     const found = await this.db.markDelivered(ids);
-    for (const id of ids) if (!found.some((o) => o.warehouseId === id)) this.log(`主服务器确认交付了未知订单 ${id}，忽略`);
+    for (const id of ids) if (!found.some((o) => o.warehouseId === id)) this.log(L(`主服务器确认交付了未知订单 ${id}，忽略`, `Main server confirmed delivery of unknown order ${id}, ignored`));
     for (const o of found) this.annotateRecipient(o);
   }
 
@@ -171,7 +175,7 @@ export class ShopAgentServer {
       if (!r) continue;
       const gift = r.charId !== o.charId;
       await this.db.setRecipient(o.warehouseId, gift ? r.charId : null, gift ? r.name : null);
-      if (gift) this.log(`补查订单 ${o.warehouseId}：${o.charName} 赠送给 ${r.name}`);
+      if (gift) this.log(L(`补查订单 ${o.warehouseId}：${o.charName} 赠送给 ${r.name}`, `Order ${o.warehouseId} looked up: ${o.charName} gifted it to ${r.name}`));
     }
   }
 
@@ -180,11 +184,13 @@ export class ShopAgentServer {
       const gift = !!r && r.charId !== o.charId;
       if (r) await this.db.setRecipient(o.warehouseId, gift ? r.charId : null, gift ? r.name : null).catch(() => {});
       this.log(gift
-        ? `订单 ${o.warehouseId} 已交付：${o.charName} 赠送的 ${o.goodsName} ×${o.itemAmount} 已发到 ${r!.name} 的邮箱`
-        : `订单 ${o.warehouseId} 已交付：${o.charName} 的邮箱收到 ${o.goodsName} ×${o.itemAmount}`);
+        ? L(`订单 ${o.warehouseId} 已交付：${o.charName} 赠送的 ${o.goodsName} ×${o.itemAmount} 已发到 ${r!.name} 的邮箱`,
+            `Order ${o.warehouseId} delivered: ${o.goodsName} ×${o.itemAmount} gifted by ${o.charName} is in ${r!.name}'s mailbox`)
+        : L(`订单 ${o.warehouseId} 已交付：${o.charName} 的邮箱收到 ${o.goodsName} ×${o.itemAmount}`,
+            `Order ${o.warehouseId} delivered: ${o.goodsName} ×${o.itemAmount} is in ${o.charName}'s mailbox`));
     };
     if (!this.mailLookup) { void done(null); return; }
-    this.mailLookup(o).then(done, (e) => { this.log(`查询订单 ${o.warehouseId} 的收件人失败：${e.message}`); void done(null); });
+    this.mailLookup(o).then(done, (e) => { this.log(L(`查询订单 ${o.warehouseId} 的收件人失败：${e.message}`, `Looking up the recipient of order ${o.warehouseId} failed: ${e.message}`)); void done(null); });
   }
 
   // GetItemsForServer: hand back every paid-but-undelivered order so Server64 mails it (again).
@@ -213,8 +219,9 @@ export class ShopAgentServer {
     s.write(packet(T.GET_ITEMS, Buffer.concat([head, ...recs])));
     if (sent.length) {
       await this.db.bumpRedelivered(sent.map((o) => o.warehouseId));
-      this.log(`主服务器查询待发物品：补发 ${sent.length} 个未交付订单（${sent.map((o) => o.warehouseId).join(', ')}）`);
-    } else this.log('主服务器查询待发物品：无');
+      const ids = sent.map((o) => o.warehouseId).join(', ');
+      this.log(L(`主服务器查询待发物品：补发 ${sent.length} 个未交付订单（${ids}）`, `Main server asked for pending items: resent ${sent.length} undelivered order(s) (${ids})`));
+    } else this.log(L('主服务器查询待发物品：无', 'Main server asked for pending items: none'));
   }
 
   private pushBalance(accountId: number, delta: number, balance: number): number {
@@ -236,13 +243,13 @@ export class ShopAgentServer {
     return new Promise((resolve, reject) => {
       const srv = net.createServer((s) => this.onConn(s));
       srv.once('error', (e: NodeJS.ErrnoException) => {
-        this.lastError = e.code === 'EADDRINUSE' ? `端口 ${this.port} 已被占用` : e.message;
-        this.log(`启动失败：${this.lastError}`);
-        reject(new Error(this.lastError));
+        this.lastError = e.code === 'EADDRINUSE' ? L(`端口 ${this.port} 已被占用`, `Port ${this.port} is already in use`) : e.message;
+        this.log(L(`启动失败：${pick(this.lastError, 'zh')}`, `Start failed: ${pick(this.lastError, 'en')}`));
+        reject(Object.assign(new Error(pick(this.lastError, 'zh')), { msg: typeof this.lastError === 'string' ? { zh: this.lastError, en: this.lastError } : this.lastError }));
       });
       srv.listen(this.port, this.host, () => {
         this.server = srv; this.lastError = null;
-        this.log(`点券服务已启动 ${this.host}:${this.port}，等待主服务器连接`);
+        this.log(L(`点券服务已启动 ${this.host}:${this.port}，等待主服务器连接`, `Points service started on ${this.host}:${this.port}, waiting for the main server`));
         resolve();
       });
     });
@@ -251,7 +258,7 @@ export class ShopAgentServer {
   private onConn(s: net.Socket) {
     this.conns.add(s);
     const connKey = `${this.bootId}.${++this.connSeq}`;
-    this.log(`主服务器已连接 ${s.remoteAddress}:${s.remotePort}`);
+    this.log(L(`主服务器已连接 ${s.remoteAddress}:${s.remotePort}`, `Main server connected from ${s.remoteAddress}:${s.remotePort}`));
     let buf = Buffer.alloc(0);
     // DB work is async; chain the packets of one connection so they are handled and answered in arrival order.
     let chain: Promise<void> = Promise.resolve();
@@ -259,16 +266,16 @@ export class ShopAgentServer {
       buf = Buffer.concat([buf, d]);
       while (buf.length >= 2) {
         const len = buf.readUInt16LE(0);
-        if (len < 4) { this.log(`异常包长度 ${len}，断开`); s.destroy(); return; }
+        if (len < 4) { this.log(L(`异常包长度 ${len}，断开`, `Bad packet length ${len}, disconnecting`)); s.destroy(); return; }
         if (buf.length < len) break;
         const p = buf.subarray(0, len);
         buf = buf.subarray(len);
         const type = p.readUInt16LE(2), body = Buffer.from(p.subarray(4));
-        chain = chain.then(() => this.onPacket(s, connKey, type, body)).catch((e: any) => { this.log(`处理出错：${e.message}`); });
+        chain = chain.then(() => this.onPacket(s, connKey, type, body)).catch((e: any) => { this.log(L(`处理出错：${e.message}`, `Handling failed: ${e.message}`)); });
       }
     });
-    const bye = (why: string) => { if (this.conns.delete(s)) this.log(`主服务器连接断开：${why}`); };
-    s.on('close', () => bye('关闭'));
+    const bye = (why: Msg) => { if (this.conns.delete(s)) this.log(L(`主服务器连接断开：${pick(why, 'zh')}`, `Main server disconnected: ${pick(why, 'en')}`)); };
+    s.on('close', () => bye(L('关闭', 'closed')));
     s.on('error', (e) => bye(e.message));
   }
 
@@ -276,7 +283,8 @@ export class ShopAgentServer {
     switch (type) {
       case T.VERSION: {
         this.serverId = d.length >= 12 ? d.readInt32LE(8) : null;
-        this.log(`收到握手（协议 ${d.length >= 8 ? d.readUInt32LE(4) : '?'}，服务器编号 ${this.serverId}），回复握手确认`);
+        const pv = d.length >= 8 ? d.readUInt32LE(4) : '?';
+        this.log(L(`收到握手（协议 ${pv}，服务器编号 ${this.serverId}），回复握手确认`, `Handshake received (protocol ${pv}, server ${this.serverId}), answered`));
         const b = Buffer.alloc(4); b.writeUInt32LE(PROTOCOL_VERSION, 0);
         s.write(packet(T.VERSION, b));
         break;
@@ -298,7 +306,7 @@ export class ShopAgentServer {
           args.push(a);
         }
         s.write(packet(T.GET_POINT, Buffer.concat([head, ...args])));
-        this.log(`账号 ${accountId} 登录，查询点券：${bal}`);
+        this.log(L(`账号 ${accountId} 登录，查询点券：${bal}`, `Account ${accountId} logged in, points balance: ${bal}`));
         break;
       }
       case T.BUY:
@@ -308,7 +316,7 @@ export class ShopAgentServer {
         await this.onDelivered(d);
         break;
       default:
-        this.log(`收到未知类型 0x${type.toString(16)}（${d.length} 字节），忽略`);
+        this.log(L(`收到未知类型 0x${type.toString(16)}（${d.length} 字节），忽略`, `Unknown packet type 0x${type.toString(16)} (${d.length} bytes), ignored`));
     }
   }
 }

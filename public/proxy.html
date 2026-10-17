@@ -62,7 +62,7 @@
                   </div>
                   <div id="log" class="aa-log"></div>
                   <p class="text-muted small mt-2 mb-0">
-                    日志同时按天写入 <code>AionAdmin\data\proxy_logs\gm_日期.log</code>。
+                    日志同时按天写入 <code>AionWeb\data\proxy_logs\gm_日期.log</code>。
                     "记录全部报文"会记下每个收发的包头，量很大，只在排查问题时打开。
                   </p>
                 </div>
@@ -75,19 +75,20 @@
     </div>
   </div>
   <script src="vendors/base/vendor.bundle.base.js"></script>
+  <script src="js/i18n.js"></script>
   <script src="js/app.js"></script>
   <script src="js/off-canvas.js"></script>
   <script src="js/hoverable-collapse.js"></script>
   <script src="js/template.js"></script>
   <script>
     const logBox = document.getElementById('log');
-    const CAT = { gm: 'GM', conn: '连接', pkt: '报文', err: '错误' };
+    const CAT = { gm: 'GM', conn: AA.t('连接'), pkt: AA.t('报文'), err: AA.t('错误') };
     let last = 0;
     let lines = [];
 
     function renderStatus(s) {
       document.getElementById('st-state').innerHTML = s.running
-        ? '<span class="badge bg-success">运行中</span>' : '<span class="badge bg-secondary">已停止</span>';
+        ? `<span class="badge bg-success">${AA.t('运行中')}</span>` : `<span class="badge bg-secondary">${AA.t('已停止')}</span>`;
       document.getElementById('st-route').textContent = `${s.listen} → ${s.target}`;
       document.getElementById('st-clients').textContent = s.running ? s.clients : '–';
       document.getElementById('st-cmds').textContent = s.commands;
@@ -108,7 +109,7 @@
     function renderLog() {
       const f = document.getElementById('filter').value.trim().toLowerCase();
       const shown = f ? lines.filter((l) => l.text.toLowerCase().includes(f)) : lines;
-      logBox.innerHTML = shown.slice(-1500).map(fmt).join('') || '<div class="text-muted">暂无日志</div>';
+      logBox.innerHTML = shown.slice(-1500).map(fmt).join('') || `<div class="text-muted">${AA.t('暂无日志')}</div>`;
       if (document.getElementById('opt-follow').checked) logBox.scrollTop = logBox.scrollHeight;
     }
 
@@ -128,14 +129,14 @@
     }
 
     document.getElementById('btn-start').addEventListener('click', async () => {
-      try { renderStatus(await AA.api('POST', '/api/proxy/start', {})); AA.toast('代理已启动'); }
-      catch (e) { AA.toast('启动失败：' + e.message, 'danger'); }
+      try { renderStatus(await AA.api('POST', '/api/proxy/start', {})); AA.toast(AA.t('代理已启动')); }
+      catch (e) { AA.toast(AA.t('启动失败：{0}', e.message), 'danger'); }
       poll();
     });
     document.getElementById('btn-stop').addEventListener('click', async () => {
-      if (!confirm('停止代理会断开当前所有游戏连接（在线的角色会掉线），确定吗？')) return;
+      if (!confirm(AA.t('停止代理会断开当前所有游戏连接（在线的角色会掉线），确定吗？'))) return;
       renderStatus(await AA.api('POST', '/api/proxy/stop', {}));
-      AA.toast('代理已停止', 'warning');
+      AA.toast(AA.t('代理已停止'), 'warning');
       poll();
     });
     document.getElementById('opt-packets').addEventListener('change', async (e) => {

@@ -4,6 +4,7 @@ import fs from 'node:fs';
 export type ItemInfo = {
   name: string; zh: string; max_stack: number; quality: string; level: string; tradable: boolean;
   item_type: string; slot_bonus: number; equip: boolean; no_enchant: boolean;
+  en?: string;   // English name from the client's English strings (added by Tools/add_item_en.py)
 };
 
 let items: Map<number, ItemInfo> | null = null;
@@ -17,10 +18,14 @@ export function loadItems(path: string): Map<number, ItemInfo> {
   return items;
 }
 
-export function itemLabel(db: Map<number, ItemInfo>, id: number): string {
-  if (id === 0) return '（系统占位，建角时自动生成）';
+export function itemLabel(db: Map<number, ItemInfo>, id: number, lang: 'zh' | 'en' = 'zh'): string {
+  if (id === 0) return lang === 'en' ? '(system placeholder, created with the character)' : '（系统占位，建角时自动生成）';
   const it = db.get(id);
-  return it ? (it.zh || it.name) : `#${id}`;
+  return it ? itemName(it, lang) : `#${id}`;
+}
+
+export function itemName(it: ItemInfo, lang: 'zh' | 'en' = 'zh'): string {
+  return lang === 'en' ? (it.en || it.name) : (it.zh || it.name);
 }
 
 export function searchItems(db: Map<number, ItemInfo>, q: string, limit = 30) {
@@ -28,7 +33,7 @@ export function searchItems(db: Map<number, ItemInfo>, q: string, limit = 30) {
   if (!s) return [];
   const out: Array<{ id: number; gear: boolean; baseSlots: number; maxExtraSlots: number; maxEnchant: number } & ItemInfo> = [];
   for (const [id, it] of db) {
-    if (String(id).startsWith(s) || it.zh.toLowerCase().includes(s) || it.name.toLowerCase().includes(s)) {
+    if (String(id).startsWith(s) || it.zh.toLowerCase().includes(s) || it.name.toLowerCase().includes(s) || (it.en ?? '').toLowerCase().includes(s)) {
       const gear = isGear(id);
       const base = baseSlots(id, it);
       // extra sockets allowed = template option_slot_bonus, but never past 6 in total

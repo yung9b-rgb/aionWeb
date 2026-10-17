@@ -3,7 +3,8 @@ import { execFile } from 'node:child_process';
 import net from 'node:net';
 import type { Config } from './config.ts';
 import { pool, sql } from './db.ts';
-import { loadItems, itemLabel, baseSlots, isGear, maxEnchant } from './items.ts';
+import { loadItems, itemLabel, itemName, baseSlots, isGear, maxEnchant } from './items.ts';
+import { LError, type Lang } from './i18n.ts';
 import { mailSend } from './cached.ts';
 
 // ---------- service status ----------
@@ -99,6 +100,7 @@ export async function getCharacter(cfg: Config, id: number) {
   for (const it of items.recordset) {
     const info = db.get(it.name_id);
     it.item_name = itemLabel(db, it.name_id);
+    it.item_name_en = itemLabel(db, it.name_id, 'en');
     it.quality = info?.quality ?? '';
     it.stones = [0, 1, 2, 3, 4, 5].map((k) => it[`stat_enchant_${k}`]).filter((v: number) => v > 0).length;
     it.sockets = info ? baseSlots(it.name_id, info) + it.option_count : 0;
@@ -119,30 +121,33 @@ export function validateMailItems(cfg: Config, items: MailItem[]) {
   const db = loadItems(cfg.itemsCache);
   return items.map((m) => {
     const it = db.get(m.id);
-    if (!it) throw new Error(`物品 ${m.id} 在 2.7 的 items.xml 里不存在`);
+    if (!it) throw new LError(`物品 ${m.id} 在 2.7 的 items.xml 里不存在`, `Item ${m.id} does not exist in the 2.7 items.xml`);
+    const zh = itemName(it, 'zh'), en = itemName(it, 'en');
     const count = Math.trunc(m.count || 1), enchant = Math.trunc(m.enchant || 0);
-    if (count < 1 || count > it.max_stack) throw new Error(`${it.zh || it.name}：数量 ${count} 超出堆叠上限 ${it.max_stack}`);
+    if (count < 1 || count > it.max_stack) throw new LError(`${zh}：数量 ${count} 超出堆叠上限 ${it.max_stack}`, `${en}: amount ${count} exceeds the stack limit ${it.max_stack}`);
     const gear = isGear(m.id);
     const base = baseSlots(m.id, it);
     const room = Math.max(0, 6 - base);
     let slots = m.slots === 'max' ? Math.min(it.slot_bonus, room) : Math.trunc(Number(m.slots) || 0);
-    if (slots && !gear) throw new Error(`${it.zh || it.name} 不是装备，没有魔石孔`);
-    if (enchant && (!gear || it.no_enchant)) throw new Error(`${it.zh || it.name} 在 2.7 不能强化（只有武器/防具/盾牌可以）`);
+    if (slots && !gear) throw new LError(`${zh} 不是装备，没有魔石孔`, `${en} is not equipment and has no manastone sockets`);
+    if (enchant && (!gear || it.no_enchant)) throw new LError(`${zh} 在 2.7 不能强化（只有武器/防具/盾牌可以）`, `${en} cannot be enchanted in 2.7 (only weapons, armor and shields can)`);
     const encMax = maxEnchant(m.id, it);
-    if (enchant < 0) throw new Error(`强化等级不能为负数`);
-    if (enchant > encMax) throw new Error(`${it.zh || it.name}（${it.quality}）最高只能强化到 +${encMax}` +
-      (encMax === 10 ? '：只有唯一（黄）及以上品质才能 +11~+15' : ''));
-    if (slots < 0 || slots > room) throw new Error(`${it.zh || it.name}：自带 ${base} 孔 + 额外 ${slots} 孔超过 6 孔`);
-    if (slots > it.slot_bonus) throw new Error(`${it.zh || it.name}：模板最多只能额外加 ${it.slot_bonus} 孔（option_slot_bonus），不能加 ${slots} 孔`);
-    return { id: m.id, name: it.zh || it.name, count, enchant, slots, sockets: gear ? base + slots : 0 };
+    if (enchant < 0) throw new LError('强化等级不能为负数', 'The enchant level cannot be negative');
+    if (enchant > encMax) throw new LError(`${zh}（${it.quality}）最高只能强化到 +${encMax}` +
+      (encMax === 10 ? '：只有唯一（黄）及以上品质才能 +11~+15' : ''),
+      `${en} (${it.quality}) can be enchanted to +${encMax} at most` + (encMax === 10 ? ': only unique (yellow) and better can reach +11~+15' : ''));
+    if (slots < 0 || slots > room) throw new LError(`${zh}：自带 ${base} 孔 + 额外 ${slots} 孔超过 6 孔`, `${en}: ${base} base + ${slots} extra sockets exceeds 6`);
+    if (slots > it.slot_bonus) throw new LError(`${zh}：模板最多只能额外加 ${it.slot_bonus} 孔（option_slot_bonus），不能加 ${slots} 孔`,
+      `${en}: the template allows at most ${it.slot_bonus} extra sockets (option_slot_bonus), not ${slots}`);
+    return { id: m.id, name: zh, en, count, enchant, slots, sockets: gear ? base + slots : 0 };
   });
 }
 
 export async function sendMail(cfg: Config, a: MailArgs) {
-  if (!a.to.length) throw new Error('没有选择收件角色');
-  if (!a.items.length && !(a.money > 0)) throw new Error('没有要发送的物品或基纳');
-  if ([...a.title].length > 20) throw new Error('邮件标题最多 20 个字');
-  if (a.money < 0) throw new Error('基纳不能为负数');
+  if (!a.to.length) throw new LError('没有选择收件角色', 'No recipient character selected');
+  if (!a.items.length && !(a.money > 0)) throw new LError('没有要发送的物品或基纳', 'Nothing to send: no items and no kinah');
+  if ([...a.title].length > 20) throw new LError('邮件标题最多 20 个字', 'The mail title can have at most 20 characters');
+  if (a.money < 0) throw new LError('基纳不能为负数', 'Kinah cannot be negative');
   const items = validateMailItems(cfg, a.items);
   const p = await pool(cfg);
 
@@ -150,7 +155,7 @@ export async function sendMail(cfg: Config, a: MailArgs) {
   for (const name of a.to) {
     const r = await p.request().input('n', sql.NVarChar(50), name)
       .query('SELECT char_id, user_id FROM user_data WHERE user_id = @n AND delete_date = 0');
-    if (!r.recordset.length) throw new Error(`角色 ${name} 不存在或已删除`);
+    if (!r.recordset.length) throw new LError(`角色 ${name} 不存在或已删除`, `Character ${name} does not exist or was deleted`);
     rcpt.push(r.recordset[0]);
   }
 
@@ -236,7 +241,7 @@ async function sendViaCached(cfg: Config, a: MailArgs, rcpt: Array<{ char_id: nu
       }
       if (!row) {
         if (templateId) await p.request().input('t', sql.BigInt, templateId).query('DELETE FROM user_item WHERE id = @t AND char_id = 0');
-        throw new Error(`CacheD 没有为 ${c.user_id} 写入邮件（已发送 ${delivered.length} 封）`);
+        throw new LError(`CacheD 没有为 ${c.user_id} 写入邮件（已发送 ${delivered.length} 封）`, `CacheD did not write the mail for ${c.user_id} (${delivered.length} sent before)`);
       }
       delivered.push({ to: c.user_id, item: m.it?.name ?? null, templateId, ...row });
     }

@@ -46,6 +46,7 @@
     </div>
   </div>
   <script src="vendors/base/vendor.bundle.base.js"></script>
+  <script src="js/i18n.js"></script>
   <script src="js/app.js"></script>
   <script src="vendors/datatables.net/jquery.dataTables.js"></script>
   <script src="vendors/datatables.net-bs4/dataTables.bootstrap4.js"></script>
@@ -65,10 +66,10 @@
           data: rows,
           order: [[9, 'desc']],
           pageLength: 25,
-          language: ZH,
+          language: AA.lang === 'en' ? {} : ZH,
           columns: [
             { data: 'char_id' },
-            { data: 'user_id', render: (v, t, r) => t === 'display' ? `<a href="character.html?id=${r.char_id}">${AA.esc(v)}</a>` + (r.delete_date ? ' <span class="badge bg-secondary">已删除</span>' : '') : v },
+            { data: 'user_id', render: (v, t, r) => t === 'display' ? `<a href="character.html?id=${r.char_id}">${AA.esc(v)}</a>` + (r.delete_date ? ` <span class="badge bg-secondary">${AA.t('已删除')}</span>` : '') : v },
             { data: 'account_name', render: (v) => AA.esc(v) },
             { data: 'race', render: (v, t) => t === 'display' ? AA.raceBadge(v) : AA.RACES[v] },
             { data: 'class', render: (v) => AA.CLASSES[v] ?? v },
@@ -80,7 +81,7 @@
           ],
         });
       } catch (e) {
-        AA.toast('加载角色失败：' + e.message, 'danger');
+        AA.toast(AA.t('加载角色失败：{0}', e.message), 'danger');
       }
     })();
   </script>

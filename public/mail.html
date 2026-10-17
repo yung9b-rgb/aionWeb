@@ -100,6 +100,7 @@
     </div>
   </div>
   <script src="vendors/base/vendor.bundle.base.js"></script>
+  <script src="js/i18n.js"></script>
   <script src="js/app.js"></script>
   <script src="js/off-canvas.js"></script>
   <script src="js/hoverable-collapse.js"></script>
@@ -125,12 +126,12 @@
         try {
           const items = await AA.api('GET', '/api/items?q=' + encodeURIComponent(s));
           results.innerHTML = items.map((it) => `
-            <a href="#" class="list-group-item list-group-item-action" data-id="${it.id}" data-name="${AA.esc(it.zh || it.name)}"
+            <a href="#" class="list-group-item list-group-item-action" data-id="${it.id}" data-name="${AA.esc(AA.itemName(it))}"
                data-stack="${it.max_stack}" data-gear="${it.gear ? 1 : 0}" data-maxenchant="${it.maxEnchant}"
                data-base="${it.baseSlots}" data-maxextra="${it.maxExtraSlots}">
-              <span class="aa-quality-${AA.esc(String(it.quality).toLowerCase())}">${AA.esc(it.zh || it.name)}</span>
-              <small class="text-muted ms-2">${it.id} · Lv${AA.esc(it.level)} · ${AA.esc(it.quality)}${it.max_stack > 1 ? ' · 可堆叠 ' + it.max_stack : ''}</small>
-            </a>`).join('') || '<div class="list-group-item text-muted">没有找到</div>';
+              <span class="aa-quality-${AA.esc(String(it.quality).toLowerCase())}">${AA.esc(AA.itemName(it))}</span>
+              <small class="text-muted ms-2">${it.id} · Lv${AA.esc(it.level)} · ${AA.esc(AA.quality(it.quality))}${it.max_stack > 1 ? ' · ' + AA.t('可堆叠 {0}', it.max_stack) : ''}</small>
+            </a>`).join('') || `<div class="list-group-item text-muted">${AA.t('没有找到')}</div>`;
         } catch (e) { results.innerHTML = ''; }
       }, 250);
     });
@@ -148,18 +149,18 @@
 
     function render() {
       const tb = document.getElementById('list');
-      if (!picked.length) { tb.innerHTML = '<tr><td colspan="5" class="text-muted">还没有添加物品</td></tr>'; return; }
+      if (!picked.length) { tb.innerHTML = `<tr><td colspan="5" class="text-muted">${AA.t('还没有添加物品')}</td></tr>`; return; }
       tb.innerHTML = picked.map((p, i) => `
         <tr>
           <td>${AA.esc(p.name)} <small class="text-muted">${p.id}</small></td>
           <td><input type="number" class="form-control form-control-sm" min="1" max="${p.stack}" value="${p.count}" data-i="${i}" data-k="count"></td>
           <td>${p.maxEnchant > 0 ? `<input type="number" class="form-control form-control-sm" min="0" max="${p.maxEnchant}" value="${p.enchant}" data-i="${i}" data-k="enchant">
-            <small class="text-muted">最高 +${p.maxEnchant}</small>` : '<span class="text-muted">不能强化</span>'}</td>
+            <small class="text-muted">${AA.t('最高 +{0}', p.maxEnchant)}</small>` : `<span class="text-muted">${AA.t('不能强化')}</span>`}</td>
           <td>${p.gear && p.maxExtra > 0 ? `<select class="form-control form-control-sm" data-i="${i}" data-k="slots">
               ${Array.from({ length: p.maxExtra + 1 }, (_, v) => `<option value="${v}" ${p.slots === v ? 'selected' : ''}>${v}</option>`).join('')}
             </select>
-            <small class="text-muted">自带 ${p.base} 孔，最多再加 ${p.maxExtra} 孔</small>`
-            : p.gear ? `<small class="text-muted">自带 ${p.base} 孔，不能再加</small>` : '<span class="text-muted">–</span>'}</td>
+            <small class="text-muted">${AA.t('自带 {0} 孔，最多再加 {1} 孔', p.base, p.maxExtra)}</small>`
+            : p.gear ? `<small class="text-muted">${AA.t('自带 {0} 孔，不能再加', p.base)}</small>` : '<span class="text-muted">–</span>'}</td>
           <td><button class="btn btn-sm btn-outline-danger" data-del="${i}"><i class="mdi mdi-delete"></i></button></td>
         </tr>`).join('');
     }
@@ -190,20 +191,21 @@
         sender: document.getElementById('sender').value,
         mode: document.getElementById('mode').value,
       };
-      const summary = picked.map((p) => `${p.name} x${p.count}${p.enchant ? ' +' + p.enchant : ''}`).join('、') || '（无物品）';
-      if (!confirm(`确认发送？\n\n收件人：${to.join('、')}\n物品：${summary}\n基纳：${body.money}`)) return;
+      const sep = AA.t('、');
+      const summary = picked.map((p) => `${p.name} x${p.count}${p.enchant ? ' +' + p.enchant : ''}`).join(sep) || AA.t('（无物品）');
+      if (!confirm(AA.t('确认发送？\n\n收件人：{0}\n物品：{1}\n基纳：{2}', to.join(sep), summary, body.money))) return;
       const btn = document.getElementById('send');
       btn.disabled = true;
       try {
         const r = await AA.api('POST', '/api/mail', body);
-        AA.toast(`已发送 ${r.sent} 封邮件`);
+        AA.toast(AA.t('已发送 {0} 封邮件', r.sent));
         document.getElementById('result').innerHTML = `
-          <p class="mb-1">已写入 <b>${r.sent}</b> 封邮件给：${r.receivers.map(AA.esc).join('、')}</p>
-          <ul class="ps-3 mb-0">${r.items.map((it) => `<li>${AA.esc(it.name)} x${it.count}${it.enchant ? ' +' + it.enchant : ''}${it.sockets ? '，' + it.sockets + ' 孔' : ''}</li>`).join('')}</ul>`;
+          <p class="mb-1">${AA.t('已写入 <b>{0}</b> 封邮件给：{1}', r.sent, r.receivers.map(AA.esc).join(sep))}</p>
+          <ul class="ps-3 mb-0">${r.items.map((it) => `<li>${AA.esc(AA.lang === 'en' ? (it.en || it.name) : it.name)} x${it.count}${it.enchant ? ' +' + it.enchant : ''}${it.sockets ? AA.t('，{0} 孔', it.sockets) : ''}</li>`).join('')}</ul>`;
         picked.length = 0;
         render();
       } catch (e) {
-        AA.toast('发送失败：' + e.message, 'danger');
+        AA.toast(AA.t('发送失败：{0}', e.message), 'danger');
       } finally {
         btn.disabled = false;
       }
