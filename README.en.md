@@ -35,6 +35,16 @@ Everything speaks the servers' native protocols. **The main server, CacheD and t
 - **Admin Log**: every change made through the admin (logins, announcements, sent items, points, shop catalog, proxy start/stop …) is written to the database with its details; password fields are masked.
 - **UI language**: switch between 中文 and English with "Language" at the top right; the choice is kept in the browser. In English, item names use the client's English names, and API messages and service logs switch too; data such as character names, goods names and announcement text stays as it is.
 
+## Screenshots
+
+**Cash Shop**: edit tabs, categories, goods and the ranking visually
+
+![Cash Shop](docs/screenshots/shop_en.png)
+
+**Send Items**: search items by name or ID, with enchant level and extra manastone sockets
+
+![Send Items](docs/screenshots/mail_en.png)
+
 ## Architecture
 
 ```
