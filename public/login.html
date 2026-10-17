@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>登录 · 永恒之塔 GM</title>
+  <link rel="stylesheet" href="vendors/mdi/css/materialdesignicons.min.css">
+  <link rel="stylesheet" href="vendors/base/vendor.bundle.base.css">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="shortcut icon" href="images/favicon.png" />
+</head>
+<body>
+  <div class="container-scroller">
+    <div class="container-fluid page-body-wrapper full-page-wrapper">
+      <div class="content-wrapper d-flex align-items-center auth px-0">
+        <div class="row w-100 mx-0">
+          <div class="col-lg-4 mx-auto">
+            <div class="auth-form-light text-left py-5 px-4 px-sm-5">
+              <div class="brand-logo aa-brand"><i class="mdi mdi-castle"></i> 永恒之塔 GM</div>
+              <h4 id="title">登录管理后台</h4>
+              <h6 class="font-weight-light" id="subtitle">请输入管理密码</h6>
+              <form class="pt-3" id="form">
+                <div class="form-group">
+                  <input type="password" class="form-control form-control-lg" id="pw" placeholder="管理密码" autocomplete="current-password" required>
+                </div>
+                <div class="form-group d-none" id="pw2-group">
+                  <input type="password" class="form-control form-control-lg" id="pw2" placeholder="再输入一次" autocomplete="new-password">
+                </div>
+                <div class="mt-3">
+                  <button class="btn btn-block btn-primary btn-lg font-weight-medium auth-form-btn w-100" id="btn" type="submit">登录</button>
+                </div>
+                <p class="text-danger mt-3 mb-0" id="err"></p>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="vendors/base/vendor.bundle.base.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    (async function () {
+      const s = await AA.api('GET', '/api/session');
+      if (s.authed) { location.href = 'index.html'; return; }
+      const setup = s.needsSetup;
+      if (setup) {
+        document.getElementById('title').textContent = '首次使用：设置管理密码';
+        document.getElementById('subtitle').textContent = '密码至少 6 位，只保存在本机（加盐哈希）';
+        document.getElementById('pw2-group').classList.remove('d-none');
+        document.getElementById('pw').setAttribute('autocomplete', 'new-password');
+        document.getElementById('btn').textContent = '设置并进入';
+      }
+      document.getElementById('form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const pw = document.getElementById('pw').value;
+        const err = document.getElementById('err');
+        err.textContent = '';
+        try {
+          if (setup) {
+            if (pw !== document.getElementById('pw2').value) throw new Error('两次输入的密码不一致');
+            await AA.api('POST', '/api/setup', { password: pw });
+          } else {
+            await AA.api('POST', '/api/login', { password: pw });
+          }
+          location.href = 'index.html';
+        } catch (ex) {
+          err.textContent = ex.message;
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

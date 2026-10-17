@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>点券管理 · 永恒之塔 GM</title>
+  <link rel="stylesheet" href="vendors/mdi/css/materialdesignicons.min.css">
+  <link rel="stylesheet" href="vendors/base/vendor.bundle.base.css">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="shortcut icon" href="images/favicon.png" />
+</head>
+<body>
+  <div class="container-scroller">
+    <div id="aa-navbar"></div>
+    <div class="container-fluid page-body-wrapper">
+      <div id="aa-sidebar"></div>
+      <div class="main-panel">
+        <div class="content-wrapper">
+          <div class="row">
+            <div class="col-md-12 grid-margin">
+              <h2>点券管理</h2>
+              <p class="text-muted mb-0">商城的「当前持有现金」按账号计算。在这里充值或扣除，在线玩家的商城窗口会立即刷新，离线账号下次登录生效。游戏里买东西会扣这里的点券，物品通过邮件（现金道具）发到角色邮箱。</p>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-12 grid-margin stretch-card">
+              <div class="card">
+                <div class="card-body">
+                  <div class="d-flex flex-wrap align-items-center justify-content-between">
+                    <div class="d-flex flex-wrap align-items-center aa-proxy-stats">
+                      <div class="me-4 mb-2"><small class="text-muted d-block">点券服务</small><span id="st-state">–</span></div>
+                      <div class="me-4 mb-2"><small class="text-muted d-block">监听</small><span class="aa-mono" id="st-listen">–</span></div>
+                      <div class="me-4 mb-2"><small class="text-muted d-block">主服务器连接</small><span id="st-conn">–</span></div>
+                    </div>
+                    <div class="mb-2"><button class="btn btn-success" id="btn-start"><i class="mdi mdi-play"></i> 启动</button></div>
+                  </div>
+                  <p class="text-danger small mb-0" id="st-error"></p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-lg-7 grid-margin stretch-card">
+              <div class="card">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <p class="card-title mb-0">账号</p>
+                    <button class="btn btn-sm btn-outline-secondary" id="btn-refresh"><i class="mdi mdi-refresh"></i> 刷新</button>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="table table-hover">
+                      <thead><tr><th>账号</th><th>角色</th><th class="text-end">点券</th><th></th></tr></thead>
+                      <tbody id="acc-body"><tr><td colspan="4" class="text-muted">读取中…</td></tr></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-lg-5 grid-margin stretch-card">
+              <div class="card">
+                <div class="card-body">
+                  <p class="card-title">充值 / 扣除</p>
+                  <div class="mb-3">
+                    <label class="form-label small text-muted">账号</label>
+                    <select class="form-control" id="f-acc"></select>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label small text-muted">点数（负数为扣除）</label>
+                    <input type="number" class="form-control" id="f-delta" step="1" value="10000">
+                    <div class="mt-2" id="quick">
+                      <button class="btn btn-sm btn-outline-primary me-1 mb-1" data-v="1000">+1000</button>
+                      <button class="btn btn-sm btn-outline-primary me-1 mb-1" data-v="10000">+1万</button>
+                      <button class="btn btn-sm btn-outline-primary me-1 mb-1" data-v="100000">+10万</button>
+                      <button class="btn btn-sm btn-outline-danger me-1 mb-1" data-v="-1000">-1000</button>
+                    </div>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label small text-muted">备注</label>
+                    <input type="text" class="form-control" id="f-reason" maxlength="100" placeholder="后台充值">
+                  </div>
+                  <button class="btn btn-primary" id="btn-change"><i class="mdi mdi-cash-plus"></i> 确定</button>
+
+                  <p class="card-title mt-4 mb-2">最近记录</p>
+                  <div class="table-responsive" style="max-height:260px;overflow-y:auto">
+                    <table class="table table-sm">
+                      <thead><tr><th>时间</th><th>账号</th><th class="text-end">变动</th><th class="text-end">余额</th><th>备注</th></tr></thead>
+                      <tbody id="hist-body"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-12 grid-margin stretch-card">
+              <div class="card">
+                <div class="card-body">
+                  <p class="card-title">商城订单</p>
+                  <div class="table-responsive" style="max-height:320px;overflow-y:auto">
+                    <table class="table table-sm">
+                      <thead><tr><th>时间</th><th>订单号</th><th>角色</th><th>商品</th><th class="text-end">数量</th><th class="text-end">点券</th><th>状态</th></tr></thead>
+                      <tbody id="order-body"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-12 grid-margin stretch-card">
+              <div class="card">
+                <div class="card-body">
+                  <p class="card-title">日志</p>
+                  <div id="log" class="aa-log" style="height:260px"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="aa-footer"></div>
+      </div>
+    </div>
+  </div>
+  <script src="vendors/base/vendor.bundle.base.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/off-canvas.js"></script>
+  <script src="js/hoverable-collapse.js"></script>
+  <script src="js/template.js"></script>
+  <script>
+    let last = 0, accounts = [];
+    const logBox = document.getElementById('log');
+    const fmtN = (n) => Number(n).toLocaleString('zh-CN');
+    function ts(t) { const d = new Date(t), p = (n) => String(n).padStart(2, '0'); return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; }
+    const accLabel = (a) => a ? `${a.account_name ?? '账号'} (${a.account_id})` : '';
+
+    async function poll() {
+      try {
+        const [s, r] = await Promise.all([AA.api('GET', '/api/points/status'), AA.api('GET', '/api/points/logs?since=' + last)]);
+        document.getElementById('st-state').innerHTML = s.running ? '<span class="badge bg-success">运行中</span>' : '<span class="badge bg-secondary">已停止</span>';
+        document.getElementById('st-listen').textContent = s.listen;
+        document.getElementById('st-conn').innerHTML = s.connections
+          ? `<span class="badge bg-success">已连接</span> <small class="text-muted">服务器编号 ${s.serverId ?? '–'}</small>`
+          : '<span class="badge bg-warning">未连接</span>';
+        document.getElementById('st-error').textContent = s.error || '';
+        document.getElementById('btn-start').disabled = s.running;
+        if (r.lines.length) {
+          logBox.insertAdjacentHTML('beforeend', r.lines.map((l) =>
+            `<div class="aa-log-line aa-log-conn"><span class="aa-log-ts">${ts(l.t)}</span> ${AA.esc(l.text)}</div>`).join(''));
+          last = r.last;
+          logBox.scrollTop = logBox.scrollHeight;
+          if (r.lines.some((l) => /订单|购买/.test(l.text))) reload();
+        }
+      } catch (e) { /* keep polling */ }
+    }
+
+    async function loadAccounts() {
+      accounts = await AA.api('GET', '/api/points/accounts');
+      const sel = document.getElementById('f-acc'), keep = sel.value;
+      sel.innerHTML = accounts.map((a) => `<option value="${a.account_id}">${AA.esc(accLabel(a))}</option>`).join('');
+      if (keep) sel.value = keep;
+      document.getElementById('acc-body').innerHTML = accounts.length ? accounts.map((a) => `
+        <tr>
+          <td>${AA.esc(a.account_name ?? '–')} <small class="text-muted">#${a.account_id}</small></td>
+          <td>${a.chars.map((c) => `${AA.esc(c.name)} <small class="text-muted">${c.lev}级 ${AA.RACES[c.race] ?? ''}</small>`).join('<br>') || '<span class="text-muted">–</span>'}</td>
+          <td class="text-end aa-mono">${fmtN(a.points)}</td>
+          <td class="text-end"><button class="btn btn-sm btn-outline-primary" data-acc="${a.account_id}">选择</button></td>
+        </tr>`).join('') : '<tr><td colspan="4" class="text-muted">没有账号</td></tr>';
+    }
+
+    async function loadHistory() {
+      const h = await AA.api('GET', '/api/points/history');
+      const name = (id) => accLabel(accounts.find((a) => a.account_id === id)) || `#${id}`;
+      document.getElementById('hist-body').innerHTML = h.map((e) => `
+        <tr><td class="small">${AA.fmtTime(e.t)}</td><td class="small">${AA.esc(name(e.accountId))}</td>
+        <td class="text-end aa-mono ${e.delta > 0 ? 'text-success' : 'text-danger'}">${e.delta > 0 ? '+' : ''}${fmtN(e.delta)}</td>
+        <td class="text-end aa-mono">${fmtN(e.balance)}</td><td class="small">${AA.esc(e.reason)}</td></tr>`).join('')
+        || '<tr><td colspan="5" class="text-muted small">暂无</td></tr>';
+    }
+
+    async function loadOrders() {
+      const os = await AA.api('GET', '/api/points/orders');
+      document.getElementById('order-body').innerHTML = os.map((o) => `
+        <tr><td class="small">${AA.fmtTime(o.t)}</td><td class="aa-mono small">${o.warehouseId}</td>
+        <td>${AA.esc(o.charName)} <small class="text-muted">#${o.accountId}</small>${o.recipientName ? `<br><small class="text-info"><i class="mdi mdi-gift"></i> 赠送给 ${AA.esc(o.recipientName)}</small>` : ''}</td><td>${AA.esc(o.goodsName)}</td>
+        <td class="text-end">${o.itemAmount}</td><td class="text-end aa-mono">${fmtN(o.price)}</td>
+        <td>${o.status === 'delivered' ? `<span class="badge bg-success">已交付</span> <small class="text-muted">${AA.fmtTime(o.deliveredAt)}</small>`
+          : `<span class="badge bg-warning">待交付</span>${o.redelivered ? ` <small class="text-muted">已补发 ${o.redelivered} 次</small>` : ''}`}</td></tr>`).join('')
+        || '<tr><td colspan="7" class="text-muted small">暂无订单</td></tr>';
+    }
+
+    const reload = () => loadAccounts().then(loadHistory).then(loadOrders).catch((e) => AA.toast('读取失败：' + e.message, 'danger'));
+
+    document.getElementById('acc-body').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-acc]');
+      if (b) { document.getElementById('f-acc').value = b.dataset.acc; document.getElementById('f-delta').focus(); }
+    });
+    document.getElementById('quick').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-v]');
+      if (b) document.getElementById('f-delta').value = b.dataset.v;
+    });
+    document.getElementById('btn-refresh').addEventListener('click', reload);
+    document.getElementById('btn-change').addEventListener('click', async () => {
+      const accountId = Number(document.getElementById('f-acc').value);
+      const delta = Number(document.getElementById('f-delta').value);
+      const reason = document.getElementById('f-reason').value;
+      if (!accountId) { AA.toast('先选择账号', 'warning'); return; }
+      if (!Number.isInteger(delta) || delta === 0) { AA.toast('点数必须是非零整数', 'warning'); return; }
+      const a = accounts.find((x) => x.account_id === accountId);
+      if (!confirm(`${delta > 0 ? '给' : '从'} ${accLabel(a)} ${delta > 0 ? '充值' : '扣除'} ${fmtN(Math.abs(delta))} 点券？`)) return;
+      try {
+        const r = await AA.api('POST', '/api/points/change', { accountId, delta, reason, accountName: a?.account_name ?? null });
+        AA.toast(`完成，余额 ${fmtN(r.balance)}` + (r.pushed ? '（已推送到游戏）' : '（主服务器未连接，下次登录生效）'));
+        reload();
+      } catch (e) { AA.toast(e.message, 'danger'); }
+    });
+    document.getElementById('btn-start').addEventListener('click', async () => {
+      try { await AA.api('POST', '/api/points/start', {}); AA.toast('点券服务已启动'); } catch (e) { AA.toast('启动失败：' + e.message, 'danger'); }
+      poll();
+    });
+
+    reload();
+    poll();
+    setInterval(poll, 1500);
+  </script>
+</body>
+</html>

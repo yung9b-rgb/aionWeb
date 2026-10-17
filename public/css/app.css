@@ -1,0 +1,43 @@
+/* AionAdmin tweaks on top of the Majestic template */
+body, .navbar, .sidebar, .card, .btn, .form-control {
+  font-family: "Roboto", "Microsoft YaHei", "PingFang SC", sans-serif;
+}
+.aa-brand {
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: #4d83ff !important;
+  white-space: nowrap;
+}
+.aa-brand .mdi { font-size: 1.4rem; vertical-align: middle; }
+.aa-subtitle { font-size: .9rem; }
+.aa-soon .nav-link { opacity: .45; cursor: not-allowed; }
+#aa-toasts { position: fixed; top: 80px; right: 24px; z-index: 2000; max-width: 420px; }
+.aa-toast { margin-bottom: 10px; }
+.aa-status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+.aa-status-dot.on { background: #19d895; }
+.aa-status-dot.off { background: #ff6258; }
+.aa-stat .mdi { font-size: 2.2rem; }
+.aa-stat h3 { margin: 0; }
+.table td, .table th { vertical-align: middle; }
+.aa-mono { font-family: Consolas, monospace; }
+.aa-item-results { max-height: 260px; overflow-y: auto; position: absolute; z-index: 1000; width: 100%; }
+.aa-quality-epic { color: #e0a100; font-weight: 600; }
+.aa-quality-unique { color: #d06b00; font-weight: 600; }
+.aa-quality-legend { color: #2a7be4; font-weight: 600; }
+.aa-quality-rare { color: #19a974; }
+.aa-quality-mythic { color: #a42fd8; font-weight: 600; }
+.aa-check-grid { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.aa-check-grid .form-check { margin: 0; min-width: 90px; }
+.auth .aa-brand { font-size: 1.6rem; }
+.navbar .nav-link { white-space: nowrap; }
+select.form-control, .dataTables_wrapper select { color: #212529 !important; }
+.aa-log { height: 460px; overflow-y: auto; background: #1e1e2d; color: #d4d4dc; border-radius: 6px; padding: 10px 12px;
+  font-family: Consolas, "Microsoft YaHei", monospace; font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-all; }
+.aa-log .text-muted { color: #8a8aa0 !important; }
+.aa-log-ts { color: #7c7c96; }
+.aa-log-gm .aa-log-cat { color: #ffc542; font-weight: 600; }
+.aa-log-gm { color: #ffe9a8; }
+.aa-log-conn .aa-log-cat { color: #4fd1c5; }
+.aa-log-err, .aa-log-err .aa-log-cat { color: #ff6b6b; }
+.aa-log-pkt { color: #9a9ab0; }
+.aa-proxy-stats span { font-weight: 600; }

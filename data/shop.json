@@ -1,0 +1,618 @@
+{
+  "categories": [
+    {
+      "categoryId": 1,
+      "parentId": 0,
+      "categoryName": "消耗品",
+      "displayOrder": 1,
+      "enabled": true
+    },
+    {
+      "categoryId": 3,
+      "parentId": 1,
+      "categoryName": "经验符咒",
+      "displayOrder": 1,
+      "enabled": true
+    },
+    {
+      "categoryId": 6,
+      "parentId": 2,
+      "categoryName": "强化石",
+      "displayOrder": 1,
+      "enabled": true
+    },
+    {
+      "categoryId": 2,
+      "parentId": 0,
+      "categoryName": "装备",
+      "displayOrder": 2,
+      "enabled": true
+    },
+    {
+      "categoryId": 4,
+      "parentId": 1,
+      "categoryName": "药水",
+      "displayOrder": 2,
+      "enabled": true
+    },
+    {
+      "categoryId": 7,
+      "parentId": 2,
+      "categoryName": "魔石",
+      "displayOrder": 2,
+      "enabled": true
+    },
+    {
+      "categoryId": 5,
+      "parentId": 0,
+      "categoryName": "神石",
+      "displayOrder": 3,
+      "enabled": true
+    }
+  ],
+  "goods": [
+    {
+      "goodsId": 1004,
+      "goodsName": "罗达斯的符咒II",
+      "salePrice": 100,
+      "priceCategory": 1,
+      "priceId": 1,
+      "saleEnableQuantity": 9999,
+      "saleStatusCode": 1,
+      "itemTypeCode": 0,
+      "gameItemKey": 169620004,
+      "desc": "",
+      "goodsIconKey": 0,
+      "goodsIconBitSet": 0,
+      "itemDuration": 0,
+      "itemAmount": 10,
+      "availStart": 0,
+      "availEnd": 0,
+      "enabled": true,
+      "categories": [
+        {
+          "categoryId": 3,
+          "displayOrder": 2
+        }
+      ]
+    },
+    {
+      "goodsId": 1005,
+      "goodsName": "罗达斯的符咒",
+      "salePrice": 100,
+      "priceCategory": 1,
+      "priceId": 1,
+      "saleEnableQuantity": 9999,
+      "saleStatusCode": 1,
+      "itemTypeCode": 0,
+      "gameItemKey": 169620000,
+      "desc": "",
+      "goodsIconKey": 0,
+      "goodsIconBitSet": 0,
+      "itemDuration": 0,
+      "itemAmount": 10,
+      "availStart": 0,
+      "availEnd": 0,
+      "enabled": true,
+      "categories": [
+        {
+          "categoryId": 3,
+          "displayOrder": 2
+        }
+      ]
+    },
+    {
+      "goodsId": 1006,
+      "goodsName": "[活动]罗达斯的符咒 III",
+      "salePrice": 100,
+      "priceCategory": 1,
+      "priceId": 1,
+      "saleEnableQuantity": 9999,
+      "saleStatusCode": 1,
+      "itemTypeCode": 0,
+      "gameItemKey": 169620005,
+      "desc": "",
+      "goodsIconKey": 0,
+      "goodsIconBitSet": 0,
+      "itemDuration": 0,
+      "itemAmount": 10,
+      "availStart": 0,
+      "availEnd": 0,
+      "enabled": true,
+      "categories": [
+        {
+          "categoryId": 3,
+          "displayOrder": 3
+        }
+      ]
+    },
+    {
+      "goodsId": 1007,
+      "goodsName": "上级治疗药水",
+      "salePrice": 100,
+      "priceCategory": 1,
+      "priceId": 1,
+      "saleEnableQuantity": 9999,
+      "saleStatusCode": 1,
+      "itemTypeCode": 0,
+      "gameItemKey": 162000023,
+      "desc": "",
+      "goodsIconKey": 0,
+      "goodsIconBitSet": 0,
+      "itemDuration": 0,
+      "itemAmount": 100,
+      "availStart": 0,
+      "availEnd": 0,
+      "enabled": true,
+      "categories": [
+        {
+          "categoryId": 4,
+          "displayOrder": 1
+        }
+      ]
+    },
+    {
+      "goodsId": 1008,
+      "goodsName": "最上级恢复药水",
+      "salePrice": 100,
+      "priceCategory": 1,
+      "priceId": 1,
+      "saleEnableQuantity": 9999,
+      "saleStatusCode": 1,
+      "itemTypeCode": 0,
+      "gameItemKey": 162000045,
+      "desc": "",
+      "goodsIconKey": 0,
+      "goodsIconBitSet": 0,
+      "itemDuration": 0,
+      "itemAmount": 100,
+      "availStart": 0,
+      "availEnd": 0,
+      "enabled": true,
+      "categories": [
+        {
+          "categoryId": 4,
+          "displayOrder": 2
+        }
+      ]
+    },
+    {
+      "goodsId": 1009,
+      "goodsName": "神石:帕西美达斯的威严",
+      "salePrice": 100,
+      "priceCategory": 1,
+      "priceId": 1,
+      "saleEnableQuantity": 9999,
+      "saleStatusCode": 1,
+      "itemTypeCode": 0,
+      "gameItemKey": 168000034,
+      "desc": "",
+      "goodsIconKey": 0,
+      "goodsIconBitSet": 0,
+      "itemDuration": 0,
+      "itemAmount": 1,
+      "availStart": 0,
+      "availEnd": 0,
+      "enabled": true,
+      "categories": [
+        {
+          "categoryId": 5,
+          "displayOrder": 1
+        }
+      ]
+    },
+    {
+      "goodsId": 1010,
+      "goodsName": "神石:特拉乌普尼尔的勇气",
+      "salePrice": 100,
+      "priceCategory": 1,
+      "priceId": 1,
+      "saleEnableQuantity": 9999,
+      "saleStatusCode": 1,
+      "itemTypeCode": 0,
+      "gameItemKey": 168000047,
+      "desc": "",
+      "goodsIconKey": 0,
+      "goodsIconBitSet": 0,
+      "itemDuration": 0,
+      "itemAmount": 1,
+      "availStart": 0,
+      "availEnd": 0,
+      "enabled": true,
+      "categories": [
+        {
+          "categoryId": 5,
+          "displayOrder": 2
+        }
+      ]
+    },
+    {
+      "goodsId": 1011,
+      "goodsName": "神石:凯西内尔的恐怖",
+      "salePrice": 100,
+      "priceCategory": 1,
+      "priceId": 1,
+      "saleEnableQuantity": 9999,
+      "saleStatusCode": 1,
+      "itemTypeCode": 0,
+      "gameItemKey": 168000052,
+      "desc": "",
+      "goodsIconKey": 0,
+      "goodsIconBitSet": 0,
+      "itemDuration": 0,
+      "itemAmount": 1,
+      "availStart": 0,
+      "availEnd": 0,
+      "enabled": true,
+      "categories": [
+        {
+          "categoryId": 5,
+          "displayOrder": 3
+        }
+      ]
+    },
+    {
+      "goodsId": 1012,
+      "goodsName": "神石:司鲁德盖密尔的沉默",
+      "salePrice": 100,
+      "priceCategory": 1,
+      "priceId": 1,
+      "saleEnableQuantity": 9999,
+      "saleStatusCode": 1,
+      "itemTypeCode": 0,
+      "gameItemKey": 168000037,
+      "desc": "",
+      "goodsIconKey": 0,
+      "goodsIconBitSet": 0,
+      "itemDuration": 0,
+      "itemAmount": 1,
+      "availStart": 0,
+      "availEnd": 0,
+      "enabled": true,
+      "categories": [
+        {
+          "categoryId": 5,
+          "displayOrder": 4
+        }
+      ]
+    },
+    {
+      "goodsId": 1013,
+      "goodsName": "神石:拉斯贝尔格的爱",
+      "salePrice": 100,
+      "priceCategory": 1,
+      "priceId": 1,
+      "saleEnableQuantity": 9999,
+      "saleStatusCode": 1,
+      "itemTypeCode": 0,
+      "gameItemKey": 168000038,
+      "desc": "",
+      "goodsIconKey": 0,
+      "goodsIconBitSet": 0,
+      "itemDuration": 0,
+      "itemAmount": 1,
+      "availStart": 0,
+      "availEnd": 0,
+      "enabled": true,
+      "categories": [
+        {
+          "categoryId": 5,
+          "displayOrder": 5
+        }
+      ]
+    },
+    {
+      "goodsId": 1014,
+      "goodsName": "神石:毕达尔的尊严",
+      "salePrice": 100,
+      "priceCategory": 1,
+      "priceId": 1,
+      "saleEnableQuantity": 9999,
+      "saleStatusCode": 1,
+      "itemTypeCode": 0,
+      "gameItemKey": 168000035,
+      "desc": "",
+      "goodsIconKey": 0,
+      "goodsIconBitSet": 0,
+      "itemDuration": 0,
+      "itemAmount": 1,
+      "availStart": 0,
+      "availEnd": 0,
+      "enabled": true,
+      "categories": [
+        {
+          "categoryId": 5,
+          "displayOrder": 6
+        }
+      ]
+    },
+    {
+      "goodsId": 1015,
+      "goodsName": "神石:伊奥的眼泪",
+      "salePrice": 100,
+      "priceCategory": 1,
+      "priceId": 1,
+      "saleEnableQuantity": 9999,
+      "saleStatusCode": 1,
+      "itemTypeCode": 0,
+      "gameItemKey": 168000040,
+      "desc": "",
+      "goodsIconKey": 0,
+      "goodsIconBitSet": 0,
+      "itemDuration": 0,
+      "itemAmount": 1,
+      "availStart": 0,
+      "availEnd": 0,
+      "enabled": true,
+      "categories": [
+        {
+          "categoryId": 5,
+          "displayOrder": 7
+        }
+      ]
+    },
+    {
+      "goodsId": 1016,
+      "goodsName": "魔石:生命力+85",
+      "salePrice": 100,
+      "priceCategory": 1,
+      "priceId": 1,
+      "saleEnableQuantity": 9999,
+      "saleStatusCode": 1,
+      "itemTypeCode": 0,
+      "gameItemKey": 167000514,
+      "desc": "",
+      "goodsIconKey": 0,
+      "goodsIconBitSet": 0,
+      "itemDuration": 0,
+      "itemAmount": 1000,
+      "availStart": 0,
+      "availEnd": 0,
+      "enabled": true,
+      "categories": [
+        {
+          "categoryId": 7,
+          "displayOrder": 1
+        }
+      ]
+    },
+    {
+      "goodsId": 1017,
+      "goodsName": "魔石:攻击力+5",
+      "salePrice": 100,
+      "priceCategory": 1,
+      "priceId": 1,
+      "saleEnableQuantity": 9999,
+      "saleStatusCode": 1,
+      "itemTypeCode": 0,
+      "gameItemKey": 167000518,
+      "desc": "",
+      "goodsIconKey": 0,
+      "goodsIconBitSet": 0,
+      "itemDuration": 0,
+      "itemAmount": 1000,
+      "availStart": 0,
+      "availEnd": 0,
+      "enabled": true,
+      "categories": [
+        {
+          "categoryId": 7,
+          "displayOrder": 2
+        }
+      ]
+    },
+    {
+      "goodsId": 1018,
+      "goodsName": "魔石:魔法增幅力+23",
+      "salePrice": 100,
+      "priceCategory": 1,
+      "priceId": 1,
+      "saleEnableQuantity": 9999,
+      "saleStatusCode": 1,
+      "itemTypeCode": 0,
+      "gameItemKey": 167000487,
+      "desc": "",
+      "goodsIconKey": 0,
+      "goodsIconBitSet": 0,
+      "itemDuration": 0,
+      "itemAmount": 1000,
+      "availStart": 0,
+      "availEnd": 0,
+      "enabled": true,
+      "categories": [
+        {
+          "categoryId": 7,
+          "displayOrder": 3
+        }
+      ]
+    },
+    {
+      "goodsId": 1019,
+      "goodsName": "魔石:魔法增幅力+25",
+      "salePrice": 100,
+      "priceCategory": 1,
+      "priceId": 1,
+      "saleEnableQuantity": 9999,
+      "saleStatusCode": 1,
+      "itemTypeCode": 0,
+      "gameItemKey": 167000519,
+      "desc": "",
+      "goodsIconKey": 0,
+      "goodsIconBitSet": 0,
+      "itemDuration": 0,
+      "itemAmount": 1000,
+      "availStart": 0,
+      "availEnd": 0,
+      "enabled": true,
+      "categories": [
+        {
+          "categoryId": 7,
+          "displayOrder": 4
+        }
+      ]
+    },
+    {
+      "goodsId": 1020,
+      "goodsName": "魔石:命中+23",
+      "salePrice": 100,
+      "priceCategory": 1,
+      "priceId": 1,
+      "saleEnableQuantity": 9999,
+      "saleStatusCode": 1,
+      "itemTypeCode": 0,
+      "gameItemKey": 167000484,
+      "desc": "",
+      "goodsIconKey": 0,
+      "goodsIconBitSet": 0,
+      "itemDuration": 0,
+      "itemAmount": 1000,
+      "availStart": 0,
+      "availEnd": 0,
+      "enabled": true,
+      "categories": [
+        {
+          "categoryId": 7,
+          "displayOrder": 5
+        }
+      ]
+    },
+    {
+      "goodsId": 1021,
+      "goodsName": "魔石:命中+25",
+      "salePrice": 100,
+      "priceCategory": 1,
+      "priceId": 1,
+      "saleEnableQuantity": 9999,
+      "saleStatusCode": 1,
+      "itemTypeCode": 0,
+      "gameItemKey": 167000516,
+      "desc": "",
+      "goodsIconKey": 0,
+      "goodsIconBitSet": 0,
+      "itemDuration": 0,
+      "itemAmount": 1000,
+      "availStart": 0,
+      "availEnd": 0,
+      "enabled": true,
+      "categories": [
+        {
+          "categoryId": 7,
+          "displayOrder": 6
+        }
+      ]
+    },
+    {
+      "goodsId": 1022,
+      "goodsName": "魔石:魔法命中+12",
+      "salePrice": 100,
+      "priceCategory": 1,
+      "priceId": 1,
+      "saleEnableQuantity": 9999,
+      "saleStatusCode": 1,
+      "itemTypeCode": 0,
+      "gameItemKey": 167000541,
+      "desc": "",
+      "goodsIconKey": 0,
+      "goodsIconBitSet": 0,
+      "itemDuration": 0,
+      "itemAmount": 1000,
+      "availStart": 0,
+      "availEnd": 0,
+      "enabled": true,
+      "categories": [
+        {
+          "categoryId": 7,
+          "displayOrder": 7
+        }
+      ]
+    },
+    {
+      "goodsId": 1023,
+      "goodsName": "魔石:魔法抵抗+12",
+      "salePrice": 100,
+      "priceCategory": 1,
+      "priceId": 1,
+      "saleEnableQuantity": 9999,
+      "saleStatusCode": 1,
+      "itemTypeCode": 0,
+      "gameItemKey": 167000542,
+      "desc": "",
+      "goodsIconKey": 0,
+      "goodsIconBitSet": 0,
+      "itemDuration": 0,
+      "itemAmount": 1000,
+      "availStart": 0,
+      "availEnd": 0,
+      "enabled": true,
+      "categories": [
+        {
+          "categoryId": 7,
+          "displayOrder": 8
+        }
+      ]
+    },
+    {
+      "goodsId": 1024,
+      "goodsName": "唯一用100%魔石强化辅助剂",
+      "salePrice": 100,
+      "priceCategory": 1,
+      "priceId": 1,
+      "saleEnableQuantity": 9999,
+      "saleStatusCode": 1,
+      "itemTypeCode": 0,
+      "gameItemKey": 166150003,
+      "desc": "",
+      "goodsIconKey": 0,
+      "goodsIconBitSet": 0,
+      "itemDuration": 0,
+      "itemAmount": 100,
+      "availStart": 0,
+      "availEnd": 0,
+      "enabled": true,
+      "categories": [
+        {
+          "categoryId": 7,
+          "displayOrder": 9
+        }
+      ]
+    },
+    {
+      "goodsId": 1025,
+      "goodsName": "英雄用100%魔石强化辅助剂",
+      "salePrice": 100,
+      "priceCategory": 1,
+      "priceId": 1,
+      "saleEnableQuantity": 9999,
+      "saleStatusCode": 1,
+      "itemTypeCode": 0,
+      "gameItemKey": 166150004,
+      "desc": "",
+      "goodsIconKey": 0,
+      "goodsIconBitSet": 0,
+      "itemDuration": 0,
+      "itemAmount": 100,
+      "availStart": 0,
+      "availEnd": 0,
+      "enabled": true,
+      "categories": [
+        {
+          "categoryId": 7,
+          "displayOrder": 10
+        }
+      ]
+    }
+  ],
+  "rankings": [
+    {
+      "rankingTypeCode": 1,
+      "ranking": 1,
+      "goodsId": 1024
+    },
+    {
+      "rankingTypeCode": 1,
+      "ranking": 2,
+      "goodsId": 1025
+    }
+  ],
+  "promotions": []
+}

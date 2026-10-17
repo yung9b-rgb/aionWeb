@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>数据报文抓取 · 永恒之塔 GM</title>
+  <link rel="stylesheet" href="vendors/mdi/css/materialdesignicons.min.css">
+  <link rel="stylesheet" href="vendors/base/vendor.bundle.base.css">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="shortcut icon" href="images/favicon.png" />
+</head>
+<body>
+  <div class="container-scroller">
+    <div id="aa-navbar"></div>
+    <div class="container-fluid page-body-wrapper">
+      <div id="aa-sidebar"></div>
+      <div class="main-panel">
+        <div class="content-wrapper">
+          <div class="row">
+            <div class="col-md-12 grid-margin">
+              <h2>数据报文抓取</h2>
+              <p class="text-muted mb-0">游戏客户端连到本代理，代理把报文转发给主服务器；聊天框里以 <code>//</code> 开头的内容会被改写成 GM 命令。</p>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-12 grid-margin stretch-card">
+              <div class="card">
+                <div class="card-body">
+                  <div class="d-flex flex-wrap align-items-center justify-content-between">
+                    <div class="d-flex flex-wrap align-items-center aa-proxy-stats">
+                      <div class="me-4 mb-2"><small class="text-muted d-block">状态</small><span id="st-state">–</span></div>
+                      <div class="me-4 mb-2"><small class="text-muted d-block">监听 → 转发</small><span class="aa-mono" id="st-route">–</span></div>
+                      <div class="me-4 mb-2"><small class="text-muted d-block">游戏连接</small><span id="st-clients">–</span></div>
+                      <div class="me-4 mb-2"><small class="text-muted d-block">已转换 GM 命令</small><span id="st-cmds">–</span></div>
+                      <div class="me-4 mb-2"><small class="text-muted d-block">启动时间</small><span id="st-since">–</span></div>
+                    </div>
+                    <div class="mb-2">
+                      <button class="btn btn-success me-2" id="btn-start"><i class="mdi mdi-play"></i> 启动</button>
+                      <button class="btn btn-outline-danger" id="btn-stop"><i class="mdi mdi-stop"></i> 停止</button>
+                    </div>
+                  </div>
+                  <p class="text-danger small mb-0" id="st-error"></p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-12 stretch-card">
+              <div class="card">
+                <div class="card-body">
+                  <div class="d-flex flex-wrap align-items-center justify-content-between mb-2">
+                    <p class="card-title mb-2">日志</p>
+                    <div class="d-flex flex-wrap align-items-center">
+                      <input class="form-control form-control-sm me-3 mb-2" id="filter" placeholder="筛选关键字" style="width:180px">
+                      <div class="form-check me-3 mb-2"><label class="form-check-label"><input type="checkbox" class="form-check-input" id="opt-packets"> 记录全部报文</label></div>
+                      <div class="form-check me-3 mb-2"><label class="form-check-label"><input type="checkbox" class="form-check-input" id="opt-follow" checked> 自动滚动</label></div>
+                      <button class="btn btn-sm btn-outline-secondary mb-2" id="btn-clear"><i class="mdi mdi-delete-sweep"></i> 清空</button>
+                    </div>
+                  </div>
+                  <div id="log" class="aa-log"></div>
+                  <p class="text-muted small mt-2 mb-0">
+                    日志同时按天写入 <code>AionAdmin\data\proxy_logs\gm_日期.log</code>。
+                    "记录全部报文"会记下每个收发的包头，量很大，只在排查问题时打开。
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="aa-footer"></div>
+      </div>
+    </div>
+  </div>
+  <script src="vendors/base/vendor.bundle.base.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/off-canvas.js"></script>
+  <script src="js/hoverable-collapse.js"></script>
+  <script src="js/template.js"></script>
+  <script>
+    const logBox = document.getElementById('log');
+    const CAT = { gm: 'GM', conn: '连接', pkt: '报文', err: '错误' };
+    let last = 0;
+    let lines = [];
+
+    function renderStatus(s) {
+      document.getElementById('st-state').innerHTML = s.running
+        ? '<span class="badge bg-success">运行中</span>' : '<span class="badge bg-secondary">已停止</span>';
+      document.getElementById('st-route').textContent = `${s.listen} → ${s.target}`;
+      document.getElementById('st-clients').textContent = s.running ? s.clients : '–';
+      document.getElementById('st-cmds').textContent = s.commands;
+      document.getElementById('st-since').textContent = s.startedAt ? AA.fmtTime(s.startedAt) : '–';
+      document.getElementById('st-error').textContent = !s.running && s.error ? s.error : '';
+      document.getElementById('btn-start').disabled = s.running;
+      document.getElementById('btn-stop').disabled = !s.running;
+      document.getElementById('opt-packets').checked = s.logPackets;
+    }
+
+    function fmt(l) {
+      const d = new Date(l.t);
+      const p = (n, w = 2) => String(n).padStart(w, '0');
+      const ts = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
+      return `<div class="aa-log-line aa-log-${l.cat}"><span class="aa-log-ts">${ts}</span> <span class="aa-log-cat">[${CAT[l.cat] || l.cat}]</span> ${AA.esc(l.text)}</div>`;
+    }
+
+    function renderLog() {
+      const f = document.getElementById('filter').value.trim().toLowerCase();
+      const shown = f ? lines.filter((l) => l.text.toLowerCase().includes(f)) : lines;
+      logBox.innerHTML = shown.slice(-1500).map(fmt).join('') || '<div class="text-muted">暂无日志</div>';
+      if (document.getElementById('opt-follow').checked) logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    async function poll() {
+      try {
+        const [s, r] = await Promise.all([
+          AA.api('GET', '/api/proxy/status'),
+          AA.api('GET', `/api/proxy/logs?since=${last}&all=1`),
+        ]);
+        renderStatus(s);
+        if (r.lines.length) {
+          lines = lines.concat(r.lines).slice(-3000);
+          last = r.last;
+          renderLog();
+        }
+      } catch (e) { /* keep polling */ }
+    }
+
+    document.getElementById('btn-start').addEventListener('click', async () => {
+      try { renderStatus(await AA.api('POST', '/api/proxy/start', {})); AA.toast('代理已启动'); }
+      catch (e) { AA.toast('启动失败：' + e.message, 'danger'); }
+      poll();
+    });
+    document.getElementById('btn-stop').addEventListener('click', async () => {
+      if (!confirm('停止代理会断开当前所有游戏连接（在线的角色会掉线），确定吗？')) return;
+      renderStatus(await AA.api('POST', '/api/proxy/stop', {}));
+      AA.toast('代理已停止', 'warning');
+      poll();
+    });
+    document.getElementById('opt-packets').addEventListener('change', async (e) => {
+      renderStatus(await AA.api('POST', '/api/proxy/options', { logPackets: e.target.checked }));
+    });
+    document.getElementById('btn-clear').addEventListener('click', async () => {
+      await AA.api('POST', '/api/proxy/clear', {});
+      lines = [];
+      renderLog();
+    });
+    document.getElementById('filter').addEventListener('input', renderLog);
+
+    renderLog();
+    poll();
+    setInterval(poll, 1000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>游戏商城 · 永恒之塔 GM</title>
+  <link rel="stylesheet" href="vendors/mdi/css/materialdesignicons.min.css">
+  <link rel="stylesheet" href="vendors/base/vendor.bundle.base.css">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="shortcut icon" href="images/favicon.png" />
+  <style>
+    .sh-tree .sh-node { display: flex; align-items: center; padding: 6px 8px; border-radius: 6px; cursor: pointer; gap: 6px; }
+    .sh-tree .sh-node:hover { background: #f2f4ff; }
+    .sh-tree .sh-node.active { background: #e3e9ff; font-weight: 600; }
+    .sh-tree .sh-node.child { margin-left: 22px; }
+    .sh-tree .sh-node .sh-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sh-tree .sh-node .sh-ops { display: none; white-space: nowrap; }
+    .sh-tree .sh-node:hover .sh-ops { display: inline-block; }
+    .sh-tree .sh-node:hover small { display: none; }
+    #goods-body td, .table thead th { white-space: nowrap; }
+    #goods-body td:nth-child(2) { white-space: normal; min-width: 130px; } #goods-body td:nth-child(6) { white-space: normal; min-width: 90px; }
+    #goods-body .sh-actions .btn { padding: 3px 7px; }
+    .sh-ops .btn { padding: 1px 5px; font-size: 12px; }
+    .sh-disabled { opacity: .5; text-decoration: line-through; }
+    .sh-dlg-back { position: fixed; inset: 0; background: rgba(20, 22, 40, .45); z-index: 1500; display: none; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 40px 12px; }
+    .sh-dlg-back.show { display: flex; }
+    .sh-dlg { background: #fff; border-radius: 10px; width: 100%; max-width: 640px; box-shadow: 0 10px 40px rgba(0,0,0,.25); }
+    .sh-dlg .sh-dlg-head { padding: 14px 18px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+    .sh-dlg .sh-dlg-body { padding: 16px 18px; }
+    .sh-dlg .sh-dlg-foot { padding: 12px 18px; border-top: 1px solid #eee; text-align: right; }
+    .sh-results { max-height: 220px; overflow-y: auto; border: 1px solid #e3e3e3; border-radius: 6px; margin-top: 4px; }
+    .sh-results div { padding: 5px 8px; cursor: pointer; border-bottom: 1px solid #f1f1f1; }
+    .sh-results div:hover { background: #f2f4ff; }
+    .sh-catpick { max-height: 200px; overflow-y: auto; border: 1px solid #e3e3e3; border-radius: 6px; padding: 6px 10px; }
+    .sh-catpick .row-c { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+    .sh-catpick .row-c.child { margin-left: 22px; }
+    .sh-catpick input[type=number] { width: 70px; }
+    .sh-rank-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .sh-rank-row .sh-rank-no { width: 28px; height: 28px; border-radius: 50%; background: #4d83ff; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; flex: none; }
+    .sh-dirty { display: none; }
+    .sh-dirty.show { display: inline-block; }
+    .aa-toast { white-space: pre-line; }
+    .table td.sh-actions { white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <div class="container-scroller">
+    <div id="aa-navbar"></div>
+    <div class="container-fluid page-body-wrapper">
+      <div id="aa-sidebar"></div>
+      <div class="main-panel">
+        <div class="content-wrapper">
+          <div class="row">
+            <div class="col-md-12 grid-margin">
+              <h2>游戏商城</h2>
+              <p class="text-muted mb-0">在这里编辑商城的页签、目录、商品和推荐榜。改完点「保存并推送到游戏」，游戏里重新打开商城就能看到。数据保存在数据库 AionShop。</p>
+            </div>
+          </div>
+
+          <!-- status -->
+          <div class="row">
+            <div class="col-md-12 grid-margin stretch-card">
+              <div class="card">
+                <div class="card-body py-3">
+                  <div class="d-flex flex-wrap align-items-center justify-content-between">
+                    <div class="d-flex flex-wrap align-items-center aa-proxy-stats">
+                      <div class="me-4 mb-1"><small class="text-muted d-block">商城服务器</small><span id="st-state">–</span></div>
+                      <div class="me-4 mb-1"><small class="text-muted d-block">监听</small><span class="aa-mono" id="st-listen">–</span></div>
+                      <div class="me-4 mb-1"><small class="text-muted d-block">主服务器连接</small><span id="st-conn">–</span></div>
+                      <div class="me-4 mb-1"><small class="text-muted d-block">最近同步</small><span id="st-sync">–</span></div>
+                    </div>
+                    <div class="mb-1">
+                      <button class="btn btn-sm btn-outline-success me-2" id="btn-start"><i class="mdi mdi-play"></i> 启动</button>
+                      <button class="btn btn-sm btn-outline-primary" id="btn-push" title="不保存，只让主服务器重新拉取一次目录"><i class="mdi mdi-refresh"></i> 重新推送</button>
+                    </div>
+                  </div>
+                  <p class="text-danger small mb-0" id="st-error"></p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- toolbar -->
+          <div class="row">
+            <div class="col-md-12 grid-margin">
+              <div class="d-flex flex-wrap align-items-center gap-2">
+                <button class="btn btn-primary" id="btn-save"><i class="mdi mdi-content-save"></i> 保存并推送到游戏</button>
+                <button class="btn btn-outline-secondary" id="btn-revert"><i class="mdi mdi-undo"></i> 撤销改动</button>
+                <span class="badge bg-warning text-dark sh-dirty ms-2" id="dirty"><i class="mdi mdi-alert"></i> 有未保存的改动</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <!-- category tree -->
+            <div class="col-lg-3 grid-margin stretch-card">
+              <div class="card">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <p class="card-title mb-0">页签 / 目录</p>
+                    <button class="btn btn-sm btn-outline-primary" id="btn-add-tab"><i class="mdi mdi-plus"></i> 页签</button>
+                  </div>
+                  <p class="text-muted small">页签显示在商城顶部，目录显示在左侧（页签下的二级分类）。鼠标移到一行上可以操作。</p>
+                  <div class="sh-tree" id="tree"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- goods -->
+            <div class="col-lg-9 grid-margin stretch-card">
+              <div class="card">
+                <div class="card-body">
+                  <div class="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2">
+                    <p class="card-title mb-0" id="goods-title">商品</p>
+                    <div class="d-flex gap-2">
+                      <input class="form-control form-control-sm" id="goods-filter" placeholder="按名称 / 物品编号筛选" style="width:200px">
+                      <button class="btn btn-sm btn-primary" id="btn-add-goods"><i class="mdi mdi-plus"></i> 添加商品</button>
+                    </div>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="table table-hover table-sm">
+                      <thead><tr><th>编号</th><th>商品</th><th class="text-end">每份</th><th class="text-end">价格</th><th>有效期</th><th>分类</th><th>状态</th><th></th></tr></thead>
+                      <tbody id="goods-body"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <!-- ranking -->
+            <div class="col-lg-5 grid-margin stretch-card">
+              <div class="card">
+                <div class="card-body">
+                  <p class="card-title">推荐榜（出售链接）</p>
+                  <p class="text-muted small">商城右侧的 6 个位置，按这里的顺序显示。只能选已上架的商品。</p>
+                  <div id="rank"></div>
+                </div>
+              </div>
+            </div>
+            <!-- logs -->
+            <div class="col-lg-7 grid-margin stretch-card">
+              <div class="card">
+                <div class="card-body">
+                  <p class="card-title">日志</p>
+                  <div id="log" class="aa-log" style="height:330px"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- advanced JSON -->
+          <div class="row">
+            <div class="col-md-12 grid-margin stretch-card">
+              <div class="card">
+                <div class="card-body">
+                  <a href="#" id="json-toggle" class="card-title d-block mb-0"><i class="mdi mdi-code-json"></i> 高级：直接编辑 JSON <small class="text-muted">（点击展开）</small></a>
+                  <div id="json-box" class="d-none mt-3">
+                    <textarea class="form-control aa-mono" id="json" rows="20" spellcheck="false" style="font-size:12.5px"></textarea>
+                    <div class="mt-2">
+                      <button class="btn btn-sm btn-outline-primary" id="btn-json-apply">把 JSON 应用到上面的编辑器</button>
+                      <small class="text-muted ms-2">应用后仍需点「保存并推送到游戏」。</small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="aa-footer"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- category dialog -->
+  <div class="sh-dlg-back" id="dlg-cat">
+    <div class="sh-dlg" style="max-width:460px">
+      <div class="sh-dlg-head"><strong id="cat-title">分类</strong><button class="btn btn-sm btn-light" data-close>✕</button></div>
+      <div class="sh-dlg-body">
+        <div class="mb-3"><label class="form-label small text-muted">名称（最多 50 字）</label><input class="form-control" id="cat-name" maxlength="50"></div>
+        <div class="mb-3"><label class="form-label small text-muted">位置</label><select class="form-control" id="cat-parent"></select></div>
+        <div class="mb-3"><label class="form-label small text-muted">排序（越小越靠前）</label><input type="number" class="form-control" id="cat-order"></div>
+        <div class="form-check"><input class="form-check-input" type="checkbox" id="cat-enabled"><label class="form-check-label" for="cat-enabled">启用（停用后游戏里不显示）</label></div>
+      </div>
+      <div class="sh-dlg-foot"><button class="btn btn-light me-2" data-close>取消</button><button class="btn btn-primary" id="cat-ok">确定</button></div>
+    </div>
+  </div>
+
+  <!-- goods dialog -->
+  <div class="sh-dlg-back" id="dlg-goods">
+    <div class="sh-dlg">
+      <div class="sh-dlg-head"><strong id="g-title">商品</strong><button class="btn btn-sm btn-light" data-close>✕</button></div>
+      <div class="sh-dlg-body">
+        <div class="mb-3">
+          <label class="form-label small text-muted">物品（输入名称或编号搜索）</label>
+          <input class="form-control" id="g-search" placeholder="例如：符咒、115000985">
+          <div class="sh-results d-none" id="g-results"></div>
+          <div class="small mt-1" id="g-item"></div>
+        </div>
+        <div class="row">
+          <div class="col-md-8 mb-3"><label class="form-label small text-muted">商品名（最多 50 字）</label><input class="form-control" id="g-name" maxlength="50"></div>
+          <div class="col-md-4 mb-3"><label class="form-label small text-muted">商品编号</label><input type="number" class="form-control" id="g-id"></div>
+        </div>
+        <div class="row">
+          <div class="col-md-4 mb-3"><label class="form-label small text-muted">每份数量 <span id="g-maxstack" class="text-info"></span></label><input type="number" class="form-control" id="g-amount" min="1"></div>
+          <div class="col-md-4 mb-3"><label class="form-label small text-muted">价格（点券）</label><input type="number" class="form-control" id="g-price" min="0"></div>
+          <div class="col-md-4 mb-3"><label class="form-label small text-muted">有效期</label>
+            <div class="d-flex gap-1"><input type="number" class="form-control" id="g-dur" min="0" style="width:45%">
+              <select class="form-control" id="g-dur-unit"><option value="0">永久</option><option value="3600">小时</option><option value="86400">天</option></select></div>
+          </div>
+        </div>
+        <div class="mb-3"><label class="form-label small text-muted">描述 <span id="g-desc-n" class="text-muted"></span></label><textarea class="form-control" id="g-desc" rows="3" maxlength="200"></textarea></div>
+        <div class="mb-3"><label class="form-label small text-muted">放进哪些分类（右边是在该分类里的排序）</label><div class="sh-catpick" id="g-cats"></div></div>
+        <div class="form-check"><input class="form-check-input" type="checkbox" id="g-enabled"><label class="form-check-label" for="g-enabled">上架（下架后游戏里不显示，也买不到）</label></div>
+      </div>
+      <div class="sh-dlg-foot"><button class="btn btn-light me-2" data-close>取消</button><button class="btn btn-primary" id="g-ok">确定</button></div>
+    </div>
+  </div>
+
+  <script src="vendors/base/vendor.bundle.base.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/off-canvas.js"></script>
+  <script src="js/hoverable-collapse.js"></script>
+  <script src="js/template.js"></script>
+  <script>
+  (function () {
+    const $ = (id) => document.getElementById(id);
+    const esc = AA.esc;
+    let cat = null, saved = '', selected = 'all', items = {};   // items: id -> {zh, max_stack, quality}
+    const QUALITY = { common: '普通', rare: '稀有', legend: '传承', unique: '独特', epic: '史诗', mythic: '神话' };
+
+    // ---------- state ----------
+    const clone = (x) => JSON.parse(JSON.stringify(x));
+    function normalize(c) {
+      c.categories = c.categories ?? []; c.goods = c.goods ?? []; c.rankings = c.rankings ?? []; c.promotions = c.promotions ?? [];
+      for (const x of c.categories) { x.enabled = x.enabled !== false; x.parentId = x.parentId ?? 0; x.displayOrder = x.displayOrder ?? 0; }
+      for (const g of c.goods) { g.enabled = g.enabled !== false; g.categories = g.categories ?? []; }
+      return c;
+    }
+    const isDirty = () => JSON.stringify(cat) !== saved;
+    function changed() { $('dirty').classList.toggle('show', isDirty()); render(); }
+    window.addEventListener('beforeunload', (e) => { if (cat && isDirty()) { e.preventDefault(); e.returnValue = ''; } });
+
+    async function load() {
+      cat = normalize(await AA.api('GET', '/api/shop/catalog'));
+      saved = JSON.stringify(cat);
+      await fetchItems(cat.goods.map((g) => g.gameItemKey));
+      changed();
+    }
+    async function fetchItems(ids) {
+      const need = [...new Set(ids)].filter((id) => id && !(id in items));
+      if (!need.length) return;
+      Object.assign(items, await AA.api('GET', '/api/items/info?ids=' + need.join(',')));
+    }
+
+    const tops = () => cat.categories.filter((c) => c.parentId === 0).sort((a, b) => a.displayOrder - b.displayOrder || a.categoryId - b.categoryId);
+    const kids = (pid) => cat.categories.filter((c) => c.parentId === pid).sort((a, b) => a.displayOrder - b.displayOrder || a.categoryId - b.categoryId);
+    const catById = (id) => cat.categories.find((c) => c.categoryId === id);
+    const nextId = (arr, key, min) => Math.max(min, ...arr.map((x) => x[key] + 1));
+    const durText = (s) => !s ? '永久' : s % 86400 === 0 ? `${s / 86400} 天` : s % 3600 === 0 ? `${s / 3600} 小时` : `${s} 秒`;
+
+    // ---------- render ----------
+    function render() {
+      renderTree(); renderGoods(); renderRank();
+      if (!$('json-box').classList.contains('d-none')) $('json').value = JSON.stringify(cat, null, 2);
+    }
+
+    function goodsIn(sel) {
+      if (sel === 'all') return cat.goods;
+      if (sel === 'none') return cat.goods.filter((g) => !g.categories.length);
+      const ids = new Set([sel, ...kids(sel).map((k) => k.categoryId)]);
+      return cat.goods.filter((g) => g.categories.some((x) => ids.has(x.categoryId)));
+    }
+
+    function nodeHtml(c, child) {
+      const n = goodsIn(c.categoryId).length;
+      return `<div class="sh-node ${child ? 'child' : ''} ${selected === c.categoryId ? 'active' : ''}" data-sel="${c.categoryId}">
+        <i class="mdi ${child ? 'mdi-subdirectory-arrow-right' : 'mdi-tab'} text-muted"></i>
+        <span class="sh-name ${c.enabled ? '' : 'sh-disabled'}">${esc(c.categoryName)}</span><small class="text-muted">${n}</small>
+        <span class="sh-ops">
+          <button class="btn btn-light" data-op="up" data-id="${c.categoryId}" title="上移">↑</button><button class="btn btn-light" data-op="down" data-id="${c.categoryId}" title="下移">↓</button>
+          ${child ? '' : `<button class="btn btn-light" data-op="addchild" data-id="${c.categoryId}" title="添加目录">＋</button>`}
+          <button class="btn btn-light" data-op="edit" data-id="${c.categoryId}" title="编辑">✎</button><button class="btn btn-light text-danger" data-op="del" data-id="${c.categoryId}" title="删除">✕</button>
+        </span></div>`;
+    }
+    function renderTree() {
+      const fixed = (key, icon, label) => `<div class="sh-node ${selected === key ? 'active' : ''}" data-sel="${key}"><i class="mdi ${icon} text-muted"></i><span class="sh-name">${label}</span><small class="text-muted">${goodsIn(key).length}</small></div>`;
+      $('tree').innerHTML = fixed('all', 'mdi-view-list', '全部商品')
+        + tops().map((t) => nodeHtml(t, false) + kids(t.categoryId).map((k) => nodeHtml(k, true)).join('')).join('')
+        + fixed('none', 'mdi-help-circle-outline', '未分类（游戏里看不到）')
+        + (cat.categories.length ? '' : '<p class="text-muted small mt-2">还没有页签，先点右上角「＋ 页签」。</p>');
+    }
+
+    function renderGoods() {
+      const f = $('goods-filter').value.trim().toLowerCase();
+      const sc = typeof selected === 'number' ? catById(selected) : null;
+      $('goods-title').textContent = selected === 'all' ? '全部商品' : selected === 'none' ? '未分类的商品' : `「${sc?.categoryName ?? ''}」里的商品`;
+      let list = goodsIn(selected).filter((g) => !f || g.goodsName.toLowerCase().includes(f) || String(g.gameItemKey).includes(f) || (items[g.gameItemKey]?.zh ?? '').toLowerCase().includes(f));
+      if (typeof selected === 'number') {
+        const ord = (g) => (g.categories.find((x) => x.categoryId === selected) ?? { displayOrder: 9999 }).displayOrder;
+        list = list.slice().sort((a, b) => ord(a) - ord(b) || a.goodsId - b.goodsId);
+      } else list = list.slice().sort((a, b) => a.goodsId - b.goodsId);
+      $('goods-body').innerHTML = list.map((g) => {
+        const it = items[g.gameItemKey];
+        const cats = g.categories.map((x) => { const c = catById(x.categoryId); if (!c) return ''; const p = c.parentId ? catById(c.parentId) : null;
+          return `<span class="badge bg-light text-dark me-1">${esc(p ? p.categoryName + ' › ' : '')}${esc(c.categoryName)}</span>`; }).join('') || '<span class="text-warning small">未分类</span>';
+        return `<tr class="${g.enabled ? '' : 'text-muted'}">
+          <td class="aa-mono small">${g.goodsId}</td>
+          <td><div class="${g.enabled ? '' : 'sh-disabled'}">${esc(g.goodsName)}</div><small class="text-muted">${esc(it?.zh ?? '未知物品')} · ${g.gameItemKey}</small></td>
+          <td class="text-end">${g.itemAmount}${it && g.itemAmount > it.max_stack ? ' <span class="text-danger" title="超过最大堆叠">!</span>' : ''}</td>
+          <td class="text-end aa-mono">${Number(g.salePrice).toLocaleString('zh-CN')}</td>
+          <td class="small">${durText(g.itemDuration)}</td>
+          <td>${cats}</td>
+          <td><button class="btn btn-sm py-1 px-2 ${g.enabled ? 'btn-success' : 'btn-outline-secondary'}" data-gop="toggle" data-id="${g.goodsId}">${g.enabled ? '上架中' : '已下架'}</button></td>
+          <td class="sh-actions text-end"><button class="btn btn-sm btn-outline-primary" data-gop="edit" data-id="${g.goodsId}">编辑</button>
+            <button class="btn btn-sm btn-outline-secondary" data-gop="copy" data-id="${g.goodsId}" title="复制成新商品">复制</button>
+            <button class="btn btn-sm btn-outline-danger" data-gop="del" data-id="${g.goodsId}">删除</button></td></tr>`;
+      }).join('') || `<tr><td colspan="8" class="text-muted">这里还没有商品${selected === 'none' ? '' : '，点右上角「添加商品」'}</td></tr>`;
+    }
+
+    function renderRank() {
+      const opts = cat.goods.filter((g) => g.enabled).sort((a, b) => a.goodsId - b.goodsId);
+      let html = '';
+      for (let pos = 1; pos <= 6; pos++) {
+        const r = cat.rankings.find((x) => (x.rankingTypeCode ?? 1) === 1 && x.ranking === pos);
+        html += `<div class="sh-rank-row"><div class="sh-rank-no">${pos}</div>
+          <select class="form-control form-control-sm" data-rank="${pos}"><option value="">（空）</option>
+          ${opts.map((g) => `<option value="${g.goodsId}" ${r && r.goodsId === g.goodsId ? 'selected' : ''}>${esc(g.goodsName)}（${g.goodsId}）</option>`).join('')}
+          ${r && !opts.some((g) => g.goodsId === r.goodsId) ? `<option value="${r.goodsId}" selected>⚠ 商品 ${r.goodsId} 已下架或不存在</option>` : ''}</select>
+          <button class="btn btn-sm btn-light" data-rop="up" data-pos="${pos}" ${pos === 1 ? 'disabled' : ''}>↑</button><button class="btn btn-sm btn-light" data-rop="down" data-pos="${pos}" ${pos === 6 ? 'disabled' : ''}>↓</button></div>`;
+      }
+      $('rank').innerHTML = html;
+    }
+
+    // ---------- dialogs ----------
+    function openDlg(id) { $(id).classList.add('show'); }
+    function closeDlg(id) { $(id).classList.remove('show'); }
+    document.querySelectorAll('.sh-dlg-back').forEach((d) => d.addEventListener('click', (e) => { if (e.target === d || e.target.closest('[data-close]')) closeDlg(d.id); }));
+
+    let catEditing = null;   // null = new
+    function catDialog(c, parentId) {
+      catEditing = c;
+      $('cat-title').textContent = c ? `编辑「${c.categoryName}」` : (parentId ? '添加目录' : '添加页签');
+      $('cat-name').value = c?.categoryName ?? '';
+      const pid = c ? c.parentId : parentId;
+      const hasKids = c && kids(c.categoryId).length;
+      $('cat-parent').innerHTML = `<option value="0">顶级页签</option>` + tops().filter((t) => !c || t.categoryId !== c.categoryId)
+        .map((t) => `<option value="${t.categoryId}" ${hasKids ? 'disabled' : ''}>「${esc(t.categoryName)}」下的目录</option>`).join('');
+      $('cat-parent').value = String(pid);
+      const siblings = cat.categories.filter((x) => x.parentId === pid && x !== c);
+      $('cat-order').value = c ? c.displayOrder : Math.max(0, ...siblings.map((x) => x.displayOrder)) + 1;
+      $('cat-enabled').checked = c ? c.enabled : true;
+      openDlg('dlg-cat'); setTimeout(() => $('cat-name').focus(), 50);
+    }
+    $('cat-ok').addEventListener('click', () => {
+      const name = $('cat-name').value.trim();
+      if (!name) { AA.toast('请填写名称', 'warning'); return; }
+      const v = { categoryName: name, parentId: Number($('cat-parent').value), displayOrder: Math.trunc(Number($('cat-order').value) || 0), enabled: $('cat-enabled').checked };
+      if (catEditing) Object.assign(catEditing, v);
+      else { const c = { categoryId: nextId(cat.categories, 'categoryId', 1), ...v }; cat.categories.push(c); selected = c.categoryId; }
+      closeDlg('dlg-cat'); changed();
+    });
+
+    let gEditing = null, gItem = null;
+    function goodsDialog(g, copy = false) {
+      gEditing = copy ? null : g;
+      $('g-title').textContent = !g ? '添加商品' : copy ? `复制「${g.goodsName}」` : `编辑「${g.goodsName}」`;
+      $('g-id').value = gEditing ? g.goodsId : nextId(cat.goods, 'goodsId', 1001);
+      $('g-id').disabled = !!gEditing;
+      $('g-search').value = ''; $('g-results').classList.add('d-none');
+      setItem(g ? g.gameItemKey : null);
+      $('g-name').value = g ? g.goodsName + (copy ? '（副本）' : '') : '';
+      $('g-amount').value = g ? g.itemAmount : 1;
+      $('g-price').value = g ? g.salePrice : 100;
+      const d = g?.itemDuration ?? 0;
+      const unit = !d ? 0 : d % 86400 === 0 ? 86400 : 3600;
+      $('g-dur-unit').value = String(unit); $('g-dur').value = unit ? d / unit : ''; $('g-dur').disabled = !unit;
+      $('g-desc').value = g?.desc ?? ''; descCount();
+      $('g-enabled').checked = g ? g.enabled : true;
+      const sel = g ? g.categories : (typeof selected === 'number' ? [{ categoryId: selected, displayOrder: goodsIn(selected).length + 1 }] : []);
+      const row = (c, child) => { const s = sel.find((x) => x.categoryId === c.categoryId);
+        return `<div class="row-c ${child ? 'child' : ''}"><input type="checkbox" class="form-check-input" data-cat="${c.categoryId}" ${s ? 'checked' : ''}>
+          <span class="flex-fill ${c.enabled ? '' : 'sh-disabled'}">${esc(c.categoryName)}</span>
+          <input type="number" class="form-control form-control-sm" data-cord="${c.categoryId}" value="${s ? s.displayOrder : 1}" title="排序"></div>`; };
+      $('g-cats').innerHTML = tops().map((t) => row(t, false) + kids(t.categoryId).map((k) => row(k, true)).join('')).join('') || '<span class="text-muted small">还没有分类</span>';
+      openDlg('dlg-goods'); setTimeout(() => (g ? $('g-name') : $('g-search')).focus(), 50);
+    }
+    function setItem(id) {
+      gItem = id;
+      const it = id ? items[id] : null;
+      $('g-item').innerHTML = !id ? '<span class="text-warning">还没选物品</span>'
+        : `已选：<b>${esc(it?.zh ?? '未知物品')}</b> <span class="aa-mono">${id}</span> ${it ? `· ${QUALITY[it.quality?.toLowerCase()] ?? it.quality ?? ''} · 最大堆叠 ${it.max_stack}` : ''}`;
+      $('g-maxstack').textContent = it ? `（最多 ${Math.max(1, it.max_stack)}）` : '';
+      $('g-amount').max = it ? Math.max(1, it.max_stack) : '';
+    }
+    const descCount = () => { $('g-desc-n').textContent = `${$('g-desc').value.length}/200`; };
+    $('g-desc').addEventListener('input', descCount);
+    $('g-dur-unit').addEventListener('change', () => { const u = Number($('g-dur-unit').value); $('g-dur').disabled = !u; if (!u) $('g-dur').value = ''; else if (!$('g-dur').value) $('g-dur').value = u === 86400 ? 30 : 24; });
+    let searchTimer = 0;
+    $('g-search').addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      const q = $('g-search').value.trim();
+      if (!q) { $('g-results').classList.add('d-none'); return; }
+      searchTimer = setTimeout(async () => {
+        const rs = await AA.api('GET', '/api/items?q=' + encodeURIComponent(q)).catch(() => []);
+        for (const r of rs) items[r.id] = { zh: r.zh || r.name, name: r.name, max_stack: r.max_stack, quality: r.quality, level: r.level };
+        $('g-results').innerHTML = rs.map((r) => `<div data-item="${r.id}"><b>${esc(r.zh || r.name)}</b> <span class="aa-mono text-muted">${r.id}</span>
+          <small class="text-muted">· ${QUALITY[r.quality?.toLowerCase()] ?? r.quality} · ${r.level} 级 · 堆叠 ${r.max_stack}</small></div>`).join('') || '<div class="text-muted">没找到</div>';
+        $('g-results').classList.remove('d-none');
+      }, 250);
+    });
+    $('g-results').addEventListener('click', (e) => {
+      const d = e.target.closest('[data-item]'); if (!d) return;
+      const id = Number(d.dataset.item); setItem(id);
+      if (!$('g-name').value.trim() || $('g-name').dataset.auto === '1') { $('g-name').value = (items[id]?.zh ?? '').slice(0, 50); $('g-name').dataset.auto = '1'; }
+      $('g-results').classList.add('d-none'); $('g-search').value = '';
+    });
+    $('g-name').addEventListener('input', () => { $('g-name').dataset.auto = ''; });
+    $('g-ok').addEventListener('click', () => {
+      const id = Math.trunc(Number($('g-id').value));
+      const name = $('g-name').value.trim(), amount = Math.trunc(Number($('g-amount').value)), price = Number($('g-price').value);
+      const unit = Number($('g-dur-unit').value), dur = unit ? Math.trunc(Number($('g-dur').value) * unit) : 0;
+      const it = items[gItem];
+      const err = !gItem ? '请先选择物品' : !name ? '请填写商品名' : name.length > 50 ? '商品名最多 50 字'
+        : !(id > 0) ? '商品编号要是正整数' : !gEditing && cat.goods.some((g) => g.goodsId === id) ? `商品编号 ${id} 已被占用`
+        : !(amount >= 1) ? '每份数量至少 1' : it && amount > Math.max(1, it.max_stack) ? `这个物品最多堆叠 ${it.max_stack} 个`
+        : !Number.isInteger(price) || price < 0 ? '价格要是 0 以上的整数' : unit && !(dur > 0) ? '请填写有效期' : null;
+      if (err) { AA.toast(err, 'warning'); return; }
+      const cats = [...$('g-cats').querySelectorAll('[data-cat]:checked')].map((cb) => ({ categoryId: Number(cb.dataset.cat),
+        displayOrder: Math.trunc(Number($('g-cats').querySelector(`[data-cord="${cb.dataset.cat}"]`).value) || 0) }));
+      const v = { goodsName: name, gameItemKey: gItem, itemAmount: amount, salePrice: price, itemDuration: dur, desc: $('g-desc').value.slice(0, 200),
+        enabled: $('g-enabled').checked, categories: cats };
+      if (gEditing) Object.assign(gEditing, v);
+      else cat.goods.push({ goodsId: id, priceCategory: 1, priceId: 1, saleEnableQuantity: 9999, saleStatusCode: 1, itemTypeCode: 0,
+        goodsIconKey: 0, goodsIconBitSet: 0, availStart: 0, availEnd: 0, ...v });
+      if (!cats.length) AA.toast('这个商品没有放进任何分类，游戏里看不到它', 'warning');
+      closeDlg('dlg-goods'); changed();
+    });
+
+    // ---------- actions ----------
+    $('tree').addEventListener('click', (e) => {
+      const op = e.target.closest('[data-op]');
+      if (op) {
+        e.stopPropagation();
+        const c = catById(Number(op.dataset.id));
+        if (op.dataset.op === 'edit') catDialog(c);
+        else if (op.dataset.op === 'addchild') catDialog(null, c.categoryId);
+        else if (op.dataset.op === 'up' || op.dataset.op === 'down') {
+          const sib = (c.parentId ? kids(c.parentId) : tops());
+          sib.forEach((x, i) => { x.displayOrder = i + 1; });       // renumber first so swapping always works
+          const i = sib.indexOf(c), j = op.dataset.op === 'up' ? i - 1 : i + 1;
+          if (j >= 0 && j < sib.length) { const t = sib[i].displayOrder; sib[i].displayOrder = sib[j].displayOrder; sib[j].displayOrder = t; }
+          changed();
+        } else if (op.dataset.op === 'del') {
+          const ch = kids(c.categoryId), ids = new Set([c.categoryId, ...ch.map((k) => k.categoryId)]);
+          const n = cat.goods.filter((g) => g.categories.some((x) => ids.has(x.categoryId))).length;
+          if (!confirm(`删除「${c.categoryName}」${ch.length ? `和它下面的 ${ch.length} 个目录` : ''}？\n${n ? `${n} 个商品会从这里移出（商品本身不删）。` : ''}`)) return;
+          cat.categories = cat.categories.filter((x) => !ids.has(x.categoryId));
+          for (const g of cat.goods) g.categories = g.categories.filter((x) => !ids.has(x.categoryId));
+          if (ids.has(selected)) selected = 'all';
+          changed();
+        }
+        return;
+      }
+      const n = e.target.closest('[data-sel]');
+      if (n) { const v = n.dataset.sel; selected = v === 'all' || v === 'none' ? v : Number(v); render(); }
+    });
+    $('btn-add-tab').addEventListener('click', () => catDialog(null, 0));
+    $('btn-add-goods').addEventListener('click', () => goodsDialog(null));
+    $('goods-filter').addEventListener('input', renderGoods);
+    $('goods-body').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-gop]'); if (!b) return;
+      const g = cat.goods.find((x) => x.goodsId === Number(b.dataset.id));
+      if (b.dataset.gop === 'edit') goodsDialog(g);
+      else if (b.dataset.gop === 'copy') goodsDialog(g, true);
+      else if (b.dataset.gop === 'toggle') { g.enabled = !g.enabled; changed(); }
+      else if (b.dataset.gop === 'del') {
+        const inRank = cat.rankings.some((r) => r.goodsId === g.goodsId);
+        if (!confirm(`删除商品「${g.goodsName}」？${inRank ? '\n它也会从推荐榜里移除。' : ''}\n（已经卖出的订单记录不受影响）`)) return;
+        cat.goods = cat.goods.filter((x) => x !== g);
+        cat.rankings = cat.rankings.filter((r) => r.goodsId !== g.goodsId);
+        cat.promotions = cat.promotions.filter((r) => r.goodsId !== g.goodsId);
+        changed();
+      }
+    });
+    $('rank').addEventListener('change', (e) => {
+      const s = e.target.closest('[data-rank]'); if (!s) return;
+      const pos = Number(s.dataset.rank);
+      cat.rankings = cat.rankings.filter((r) => !((r.rankingTypeCode ?? 1) === 1 && r.ranking === pos));
+      if (s.value) cat.rankings.push({ rankingTypeCode: 1, ranking: pos, goodsId: Number(s.value) });
+      cat.rankings.sort((a, b) => a.ranking - b.ranking);
+      changed();
+    });
+    $('rank').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-rop]'); if (!b) return;
+      const pos = Number(b.dataset.pos), other = b.dataset.rop === 'up' ? pos - 1 : pos + 1;
+      for (const r of cat.rankings) if ((r.rankingTypeCode ?? 1) === 1) { if (r.ranking === pos) r.ranking = other; else if (r.ranking === other) r.ranking = pos; }
+      cat.rankings.sort((a, b) => a.ranking - b.ranking);
+      changed();
+    });
+
+    $('btn-save').addEventListener('click', async () => {
+      const uncat = cat.goods.filter((g) => g.enabled && !g.categories.length).length;
+      if (uncat && !confirm(`有 ${uncat} 个上架商品没有分类，游戏里看不到。仍然保存？`)) return;
+      $('btn-save').disabled = true;
+      try {
+        const r = await AA.api('POST', '/api/shop/catalog', cat);
+        saved = JSON.stringify(cat); changed();
+        AA.toast(r.notified ? `已保存，并通知 ${r.notified} 个主服务器重新拉取。游戏里重新打开商城即可看到。` : '已保存（主服务器未连接，连上后会自动拉取）');
+      } catch (e) { AA.toast(e.message, 'danger'); }
+      finally { $('btn-save').disabled = false; }
+    });
+    $('btn-revert').addEventListener('click', async () => { if (!isDirty() || confirm('放弃所有未保存的改动？')) await load(); });
+
+    $('json-toggle').addEventListener('click', (e) => {
+      e.preventDefault(); $('json-box').classList.toggle('d-none');
+      if (!$('json-box').classList.contains('d-none')) $('json').value = JSON.stringify(cat, null, 2);
+    });
+    $('btn-json-apply').addEventListener('click', async () => {
+      let c; try { c = JSON.parse($('json').value); } catch (e) { AA.toast('JSON 格式错误：' + e.message, 'danger'); return; }
+      if (!Array.isArray(c.categories) || !Array.isArray(c.goods)) { AA.toast('需要 categories 和 goods 数组', 'danger'); return; }
+      cat = normalize(c); await fetchItems(cat.goods.map((g) => g.gameItemKey)); changed(); AA.toast('已应用到编辑器，记得保存');
+    });
+
+    // ---------- status + logs ----------
+    let last = 0;
+    const logBox = $('log');
+    const ts = (t) => { const d = new Date(t), p = (n) => String(n).padStart(2, '0'); return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; };
+    async function poll() {
+      try {
+        const [s, r] = await Promise.all([AA.api('GET', '/api/shop/status'), AA.api('GET', '/api/shop/logs?since=' + last)]);
+        $('st-state').innerHTML = s.running ? '<span class="badge bg-success">运行中</span>' : '<span class="badge bg-secondary">已停止</span>';
+        $('st-listen').textContent = s.listen;
+        $('st-conn').innerHTML = s.connections ? `<span class="badge bg-success">已连接</span> <small class="text-muted">服务器编号 ${s.serverId ?? '–'}</small>` : '<span class="badge bg-warning">未连接</span>';
+        $('st-sync').textContent = s.lastSync ? AA.fmtTime(s.lastSync) : '–';
+        $('st-error').textContent = s.error || '';
+        $('btn-start').disabled = s.running;
+        $('btn-push').disabled = !s.connections;
+        if (r.lines.length) {
+          logBox.insertAdjacentHTML('beforeend', r.lines.map((l) => `<div class="aa-log-line aa-log-conn"><span class="aa-log-ts">${ts(l.t)}</span> ${esc(l.text)}</div>`).join(''));
+          last = r.last; logBox.scrollTop = logBox.scrollHeight;
+        }
+      } catch (e) { /* keep polling */ }
+    }
+    $('btn-push').addEventListener('click', async () => { const r = await AA.api('POST', '/api/shop/push', {}); AA.toast(`已通知 ${r.notified} 个主服务器重新拉取目录`); });
+    $('btn-start').addEventListener('click', async () => {
+      try { await AA.api('POST', '/api/shop/start', {}); AA.toast('商城服务器已启动'); } catch (e) { AA.toast('启动失败：' + e.message, 'danger'); }
+      poll();
+    });
+
+    load().catch((e) => AA.toast('读取目录失败：' + e.message, 'danger'));
+    poll(); setInterval(poll, 2000);
+  })();
+  </script>
+</body>
+</html>

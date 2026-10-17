@@ -1,0 +1,21 @@
+# dependencies (npm install)
+node_modules/
+
+# local settings and secrets (config.json is created from defaults on first run; see config.example.json)
+config.json
+data/secrets.json
+
+# runtime logs
+data/proxy_logs/
+*.log
+
+# legacy JSON stores, imported into AionShop on first start and no longer used
+data/points.json
+data/points_log.jsonl
+data/shop_orders.json
+
+*.tmp
+
+# OS junk
+.DS_Store
+Thumbs.db

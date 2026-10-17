@@ -1,0 +1,4 @@
+# Windows batch files need CRLF; keep them as-is (GBK text)
+*.bat -text
+# database backups are binary
+*.bak binary

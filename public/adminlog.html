@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>操作记录 · 永恒之塔 GM</title>
+  <link rel="stylesheet" href="vendors/mdi/css/materialdesignicons.min.css">
+  <link rel="stylesheet" href="vendors/base/vendor.bundle.base.css">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="shortcut icon" href="images/favicon.png" />
+</head>
+<body>
+  <div class="container-scroller">
+    <div id="aa-navbar"></div>
+    <div class="container-fluid page-body-wrapper">
+      <div id="aa-sidebar"></div>
+      <div class="main-panel">
+        <div class="content-wrapper">
+          <div class="row">
+            <div class="col-md-12 grid-margin">
+              <h2>操作记录</h2>
+              <p class="text-muted mb-0">后台的每一次改动操作（登录、公告、发送物品、点券充值扣除、商城目录、代理开关等）都记录在数据库 AionShop 里。</p>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-12 grid-margin stretch-card">
+              <div class="card">
+                <div class="card-body">
+                  <div class="d-flex flex-wrap align-items-center mb-3">
+                    <select class="form-control me-2 mb-2" id="f-action" style="max-width:220px">
+                      <option value="">全部操作</option>
+                    </select>
+                    <select class="form-control me-2 mb-2" id="f-limit" style="max-width:140px">
+                      <option value="100">最近 100 条</option>
+                      <option value="300">最近 300 条</option>
+                      <option value="1000">最近 1000 条</option>
+                    </select>
+                    <button class="btn btn-sm btn-outline-secondary mb-2" id="btn-refresh"><i class="mdi mdi-refresh"></i> 刷新</button>
+                  </div>
+                  <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                      <thead><tr><th>时间</th><th>操作</th><th>对象</th><th>结果</th><th>来源</th><th></th></tr></thead>
+                      <tbody id="body"><tr><td colspan="6" class="text-muted">读取中…</td></tr></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="aa-footer"></div>
+      </div>
+    </div>
+  </div>
+  <script src="vendors/base/vendor.bundle.base.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/off-canvas.js"></script>
+  <script src="js/hoverable-collapse.js"></script>
+  <script src="js/template.js"></script>
+  <script>
+    const NAMES = {
+      setup: '设置管理密码', login: '登录', logout: '退出登录', announce: '发公告', mail: '发送物品',
+      proxy_start: '启动数据报文抓取', proxy_stop: '停止数据报文抓取', proxy_options: '修改抓包选项', proxy_clear: '清空抓包日志',
+      catalog_save: '保存商城目录', catalog_push: '推送商城目录', shop_start: '启动商城服务器',
+      points_start: '启动点券服务', points_change: '点券充值/扣除',
+    };
+    const sel = document.getElementById('f-action');
+    sel.insertAdjacentHTML('beforeend', Object.entries(NAMES).map(([k, v]) => `<option value="${k}">${v}</option>`).join(''));
+    let rows = [];
+
+    async function load() {
+      const q = new URLSearchParams({ limit: document.getElementById('f-limit').value });
+      if (sel.value) q.set('action', sel.value);
+      try { rows = await AA.api('GET', '/api/adminlog?' + q); } catch (e) { AA.toast('读取失败：' + e.message, 'danger'); return; }
+      document.getElementById('body').innerHTML = rows.map((r, i) => `
+        <tr>
+          <td class="small text-nowrap">${AA.fmtTime(r.t)}</td>
+          <td>${AA.esc(NAMES[r.action] ?? r.action)}</td>
+          <td class="small">${AA.esc(r.target ?? '')}</td>
+          <td>${r.ok ? '<span class="badge bg-success">成功</span>' : `<span class="badge bg-danger">失败</span> <small class="text-danger">${AA.esc(r.message ?? '')}</small>`}</td>
+          <td class="small aa-mono">${AA.esc(r.remoteAddr ?? '')}</td>
+          <td class="text-end">${r.detail ? `<button class="btn btn-sm btn-outline-secondary" data-i="${i}">详情</button>` : ''}</td>
+        </tr>
+        <tr class="d-none" id="d-${i}"><td colspan="6"><pre class="aa-log mb-0" style="height:auto;max-height:320px">${AA.esc(JSON.stringify(r.detail, null, 2))}</pre></td></tr>`).join('')
+        || '<tr><td colspan="6" class="text-muted">暂无记录</td></tr>';
+    }
+    document.getElementById('body').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-i]');
+      if (b) document.getElementById('d-' + b.dataset.i).classList.toggle('d-none');
+    });
+    sel.addEventListener('change', load);
+    document.getElementById('f-limit').addEventListener('change', load);
+    document.getElementById('btn-refresh').addEventListener('click', load);
+    load();
+  </script>
+</body>
+</html>

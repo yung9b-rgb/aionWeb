@@ -1,0 +1,16 @@
+{
+  "name": "aion-admin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aion 2.7 GM admin: talks to CacheD interactive port and the game DB directly (replaces AionWeb + GMServer)",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "start": "node server/main.ts"
+  },
+  "dependencies": {
+    "mssql": "^12.7.9"
+  }
+}

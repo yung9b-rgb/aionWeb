@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>角色详情 · 永恒之塔 GM</title>
+  <link rel="stylesheet" href="vendors/mdi/css/materialdesignicons.min.css">
+  <link rel="stylesheet" href="vendors/base/vendor.bundle.base.css">
+  <link rel="stylesheet" href="vendors/datatables.net-bs4/dataTables.bootstrap4.css">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="shortcut icon" href="images/favicon.png" />
+</head>
+<body>
+  <div class="container-scroller">
+    <div id="aa-navbar"></div>
+    <div class="container-fluid page-body-wrapper">
+      <div id="aa-sidebar"></div>
+      <div class="main-panel">
+        <div class="content-wrapper">
+          <div class="row">
+            <div class="col-md-12 grid-margin">
+              <div class="d-flex justify-content-between flex-wrap align-items-end">
+                <div>
+                  <h2 id="name">角色详情</h2>
+                  <p class="text-muted mb-0"><a href="characters.html"><i class="mdi mdi-arrow-left"></i> 返回角色列表</a></p>
+                </div>
+                <a class="btn btn-primary mt-2" id="mail-btn" href="#"><i class="mdi mdi-gift"></i> 给他发物品</a>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-lg-4 grid-margin stretch-card">
+              <div class="card">
+                <div class="card-body">
+                  <p class="card-title">基本信息</p>
+                  <table class="table table-sm mb-0"><tbody id="info"></tbody></table>
+                </div>
+              </div>
+            </div>
+            <div class="col-lg-8 grid-margin stretch-card">
+              <div class="card">
+                <div class="card-body">
+                  <p class="card-title">物品 <small class="text-muted">（背包、仓库、邮箱等）</small></p>
+                  <div class="table-responsive">
+                    <table id="items" class="table w-100">
+                      <thead><tr><th>位置</th><th>物品</th><th>ID</th><th>数量</th><th>强化</th><th>魔石孔</th><th>格位</th></tr></thead>
+                      <tbody></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="aa-footer"></div>
+      </div>
+    </div>
+  </div>
+  <script src="vendors/base/vendor.bundle.base.js"></script>
+  <script src="js/app.js"></script>
+  <script src="vendors/datatables.net/jquery.dataTables.js"></script>
+  <script src="vendors/datatables.net-bs4/dataTables.bootstrap4.js"></script>
+  <script src="js/off-canvas.js"></script>
+  <script src="js/hoverable-collapse.js"></script>
+  <script src="js/template.js"></script>
+  <script>
+    (async function () {
+      const id = new URLSearchParams(location.search).get('id');
+      try {
+        const c = await AA.api('GET', '/api/characters/' + encodeURIComponent(id));
+        document.getElementById('name').textContent = c.user_id;
+        document.title = c.user_id + ' · 永恒之塔 GM';
+        document.getElementById('mail-btn').href = 'mail.html?to=' + encodeURIComponent(c.user_id);
+        const h = Math.floor((c.playtime || 0) / 3600);
+        const rows = [
+          ['角色 ID', c.char_id], ['账号', AA.esc(c.account_name) + ` <span class="text-muted">#${c.account_id}</span>`],
+          ['种族', AA.raceBadge(c.race)], ['职业', AA.CLASSES[c.class] ?? c.class], ['性别', c.gender ? '女' : '男'],
+          ['等级', c.lev], ['经验', Number(c.exp).toLocaleString()], ['深渊点数', Number(c.abyss_point).toLocaleString()],
+          ['GM 权限', c.builder === '1' ? '<span class="badge bg-warning">GM</span>' : '无'],
+          ['军团 ID', c.guild_id || '无'], ['地图', c.world],
+          ['坐标', `${Math.round(c.xlocation)}, ${Math.round(c.ylocation)}, ${Math.round(c.zlocation)}`],
+          ['游戏时长', h + ' 小时'], ['创建时间', AA.fmtTime(c.create_date)],
+          ['最近登录', AA.fmtTime(c.last_login_time)], ['最近登出', AA.fmtTime(c.last_logout_time)],
+        ];
+        document.getElementById('info').innerHTML = rows.map(([k, v]) => `<tr><th class="text-muted">${k}</th><td>${v}</td></tr>`).join('');
+        $('#items').DataTable({
+          data: c.items,
+          pageLength: 25,
+          order: [[0, 'asc'], [6, 'asc']],
+          language: { search: '搜索：', lengthMenu: '每页 _MENU_ 条', info: '共 _TOTAL_ 件', infoEmpty: '没有物品',
+            infoFiltered: '（从 _MAX_ 件中筛选）', zeroRecords: '没有匹配的物品', emptyTable: '没有物品',
+            paginate: { first: '首页', last: '末页', next: '下一页', previous: '上一页' } },
+          columns: [
+            { data: 'warehouse', render: (v, t) => t === 'display' ? (AA.WAREHOUSES[v] ?? `位置 ${v}`) : v },
+            { data: 'item_name', render: (v, t, r) => t === 'display' ? `<span class="aa-quality-${AA.esc(String(r.quality).toLowerCase())}">${AA.esc(v)}</span>` : v },
+            { data: 'name_id' },
+            { data: 'amount' },
+            { data: 'enchant_count', render: (v) => v ? '+' + v : '' },
+            { data: 'sockets', render: (v, t, r) => v ? `${r.stones}/${v}` : '' },
+            { data: 'slot_id' },
+          ],
+        });
+      } catch (e) {
+        AA.toast('加载失败：' + e.message, 'danger');
+      }
+    })();
+  </script>
+</body>
+</html>

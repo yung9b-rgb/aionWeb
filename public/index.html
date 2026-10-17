@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>仪表盘 · 永恒之塔 GM</title>
+  <link rel="stylesheet" href="vendors/mdi/css/materialdesignicons.min.css">
+  <link rel="stylesheet" href="vendors/base/vendor.bundle.base.css">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="shortcut icon" href="images/favicon.png" />
+</head>
+<body>
+  <div class="container-scroller">
+    <div id="aa-navbar"></div>
+    <div class="container-fluid page-body-wrapper">
+      <div id="aa-sidebar"></div>
+      <div class="main-panel">
+        <div class="content-wrapper">
+          <div class="row">
+            <div class="col-md-12 grid-margin">
+              <div class="d-flex justify-content-between flex-wrap align-items-end">
+                <div>
+                  <h2>仪表盘</h2>
+                  <p class="mb-md-0 text-muted">服务器运行状态与角色概况 · <span id="updated">加载中…</span></p>
+                </div>
+                <button class="btn btn-primary mt-2 mt-xl-0" id="refresh"><i class="mdi mdi-refresh"></i> 刷新</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-12 grid-margin stretch-card">
+              <div class="card">
+                <div class="card-body p-0">
+                  <div class="d-flex flex-wrap justify-content-xl-between">
+                    <div class="d-flex border-md-right flex-grow-1 align-items-center justify-content-center p-3 aa-stat">
+                      <i class="mdi mdi-server me-3 text-success"></i>
+                      <div><small class="text-muted">服务在线</small><h3 id="s-services">–</h3></div>
+                    </div>
+                    <div class="d-flex border-md-right flex-grow-1 align-items-center justify-content-center p-3 aa-stat">
+                      <i class="mdi mdi-account-multiple me-3 text-primary"></i>
+                      <div><small class="text-muted">角色总数</small><h3 id="s-chars">–</h3></div>
+                    </div>
+                    <div class="d-flex border-md-right flex-grow-1 align-items-center justify-content-center p-3 aa-stat">
+                      <i class="mdi mdi-account-card-details me-3 text-warning"></i>
+                      <div><small class="text-muted">账号数</small><h3 id="s-accounts">–</h3></div>
+                    </div>
+                    <div class="d-flex border-md-right flex-grow-1 align-items-center justify-content-center p-3 aa-stat">
+                      <i class="mdi mdi-weather-sunny me-3 text-info"></i>
+                      <div><small class="text-muted">天族 / 魔族</small><h3 id="s-races">–</h3></div>
+                    </div>
+                    <div class="d-flex flex-grow-1 align-items-center justify-content-center p-3 aa-stat">
+                      <i class="mdi mdi-crown me-3 text-danger"></i>
+                      <div><small class="text-muted">GM 角色</small><h3 id="s-gms">–</h3></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-lg-5 grid-margin stretch-card">
+              <div class="card">
+                <div class="card-body">
+                  <p class="card-title">服务状态</p>
+                  <div class="table-responsive">
+                    <table class="table">
+                      <thead><tr><th>服务</th><th>进程</th><th>端口</th><th>状态</th></tr></thead>
+                      <tbody id="services"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-lg-7 grid-margin stretch-card">
+              <div class="card">
+                <div class="card-body">
+                  <p class="card-title">最近登录的角色</p>
+                  <div class="table-responsive">
+                    <table class="table">
+                      <thead><tr><th>角色</th><th>账号</th><th>种族</th><th>职业</th><th>等级</th><th>最近登录</th></tr></thead>
+                      <tbody id="recent"></tbody>
+                    </table>
+                  </div>
+                  <p class="text-danger mb-0" id="db-err"></p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="aa-footer"></div>
+      </div>
+    </div>
+  </div>
+  <script src="vendors/base/vendor.bundle.base.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/off-canvas.js"></script>
+  <script src="js/hoverable-collapse.js"></script>
+  <script src="js/template.js"></script>
+  <script>
+    async function load() {
+      try {
+        const d = await AA.api('GET', '/api/status');
+        const up = d.services.filter((s) => s.ok).length;
+        document.getElementById('s-services').textContent = `${up} / ${d.services.length}`;
+        document.getElementById('services').innerHTML = d.services.map((s) => `
+          <tr>
+            <td>${AA.esc(s.name)}</td>
+            <td class="aa-mono">${s.process ? `<span class="aa-status-dot ${s.procRunning ? 'on' : 'off'}"></span>${AA.esc(s.process)}` : '<span class="text-muted">–</span>'}</td>
+            <td class="aa-mono">${s.port ? `<span class="aa-status-dot ${s.portOpen ? 'on' : 'off'}"></span>${s.port}` : '<span class="text-muted">–</span>'}</td>
+            <td>${s.ok ? '<span class="badge bg-success">正常</span>' : '<span class="badge bg-danger">未运行</span>'}</td>
+          </tr>`).join('');
+        const sum = d.summary;
+        if (sum.error) {
+          document.getElementById('db-err').textContent = '数据库连接失败：' + sum.error;
+        } else {
+          document.getElementById('db-err').textContent = '';
+          document.getElementById('s-chars').textContent = sum.chars;
+          document.getElementById('s-accounts').textContent = sum.accounts;
+          document.getElementById('s-races').textContent = `${sum.elyos} / ${sum.asmo}`;
+          document.getElementById('s-gms').textContent = sum.gms;
+          document.getElementById('recent').innerHTML = sum.recent.map((c) => `
+            <tr>
+              <td><a href="character.html?id=${c.char_id}">${AA.esc(c.user_id)}</a></td>
+              <td>${AA.esc(c.account_name)}</td>
+              <td>${AA.raceBadge(c.race)}</td>
+              <td>${AA.CLASSES[c.class] ?? c.class}</td>
+              <td>${c.lev}</td>
+              <td>${AA.fmtTime(c.last_login_time)}</td>
+            </tr>`).join('');
+        }
+        document.getElementById('updated').textContent = '更新于 ' + AA.fmtTime(new Date()).slice(11) + '（每 15 秒自动刷新）';
+      } catch (e) {
+        AA.toast('加载失败：' + e.message, 'danger');
+      }
+    }
+    document.getElementById('refresh').addEventListener('click', load);
+    load();
+    setInterval(load, 15000);
+  </script>
+</body>
+</html>

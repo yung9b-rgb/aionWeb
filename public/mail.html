@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>发送物品 · 永恒之塔 GM</title>
+  <link rel="stylesheet" href="vendors/mdi/css/materialdesignicons.min.css">
+  <link rel="stylesheet" href="vendors/base/vendor.bundle.base.css">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="shortcut icon" href="images/favicon.png" />
+</head>
+<body>
+  <div class="container-scroller">
+    <div id="aa-navbar"></div>
+    <div class="container-fluid page-body-wrapper">
+      <div id="aa-sidebar"></div>
+      <div class="main-panel">
+        <div class="content-wrapper">
+          <div class="row">
+            <div class="col-md-12 grid-margin">
+              <h2>发送物品</h2>
+              <p class="text-muted mb-0">通过系统邮件发放物品和基纳，打开邮箱就能收到（绑定、不可交易的物品也可以）。每件物品是一封单独的邮件。</p>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-lg-8 grid-margin stretch-card">
+              <div class="card">
+                <div class="card-body">
+                  <div class="form-group">
+                    <label for="to">收件角色 <small class="text-muted">（多个用逗号分隔）</small></label>
+                    <input class="form-control" id="to" placeholder="角色名，多个用逗号分隔" list="char-list">
+                    <datalist id="char-list"></datalist>
+                  </div>
+
+                  <div class="form-group position-relative">
+                    <label for="q">添加物品 <small class="text-muted">（输入中文名、英文名或物品 ID）</small></label>
+                    <input class="form-control" id="q" placeholder="例如：图拉突之盾 / 115000985" autocomplete="off">
+                    <div class="list-group aa-item-results shadow" id="results"></div>
+                  </div>
+
+                  <div class="table-responsive mb-3">
+                    <table class="table">
+                      <thead><tr><th>物品</th><th style="width:110px">数量</th><th style="width:110px">强化</th><th style="width:140px">额外魔石孔</th><th></th></tr></thead>
+                      <tbody id="list"><tr class="aa-empty"><td colspan="5" class="text-muted">还没有添加物品</td></tr></tbody>
+                    </table>
+                  </div>
+
+                  <div class="row">
+                    <div class="col-sm-4 form-group">
+                      <label for="money">附带基纳</label>
+                      <input class="form-control" id="money" type="number" min="0" value="0">
+                    </div>
+                    <div class="col-sm-4 form-group">
+                      <label for="title">邮件标题 <small class="text-muted">（≤20 字）</small></label>
+                      <input class="form-control" id="title" maxlength="20" value="GM赠送">
+                    </div>
+                    <div class="col-sm-4 form-group">
+                      <label for="sender">发件人</label>
+                      <input class="form-control" id="sender" value="GM">
+                    </div>
+                  </div>
+                  <div class="row">
+                    <div class="col-sm-8 form-group">
+                      <label for="content">邮件正文</label>
+                      <input class="form-control" id="content" value="来自GM的礼物">
+                    </div>
+                    <div class="col-sm-4 form-group">
+                      <label for="mode">投递方式</label>
+                      <select class="form-control" id="mode">
+                        <option value="cached">实时（经 CacheD，推荐）</option>
+                        <option value="db">直接写数据库（需小退）</option>
+                      </select>
+                    </div>
+                  </div>
+                  <button class="btn btn-primary" id="send"><i class="mdi mdi-send"></i> 发送</button>
+                </div>
+              </div>
+            </div>
+            <div class="col-lg-4 grid-margin stretch-card">
+              <div class="card">
+                <div class="card-body">
+                  <p class="card-title">说明</p>
+                  <ul class="text-muted small ps-3">
+                    <li>强化只对武器、防具、盾牌有效：白、绿、蓝最高 +10，黄（唯一）及以上最高 +15（与服务端规则一致）。</li>
+                    <li>"额外魔石孔"是在品质自带孔数之外再加的孔。可选范围按每件物品自动限制：不超过模板规定的额外孔数，且总数不超过 6。</li>
+                    <li><b>实时</b>：交给 CacheD 投递，在线玩家马上就能收到；发完会回数据库核对每封邮件确实写入。</li>
+                    <li><b>直接写数据库</b>：CacheD 连不上时的备用方式，所有邮件在一个事务里写入，在线玩家要小退才能看到。</li>
+                  </ul>
+                  <hr>
+                  <p class="card-title">发送结果</p>
+                  <div id="result" class="small text-muted">–</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="aa-footer"></div>
+      </div>
+    </div>
+  </div>
+  <script src="vendors/base/vendor.bundle.base.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/off-canvas.js"></script>
+  <script src="js/hoverable-collapse.js"></script>
+  <script src="js/template.js"></script>
+  <script>
+    const picked = [];
+    const params = new URLSearchParams(location.search);
+    if (params.get('to')) document.getElementById('to').value = params.get('to');
+
+    AA.api('GET', '/api/characters').then((rows) => {
+      document.getElementById('char-list').innerHTML = rows.filter((r) => !r.delete_date)
+        .map((r) => `<option value="${AA.esc(r.user_id)}">${AA.RACES[r.race] ?? ''} ${AA.CLASSES[r.class] ?? ''} Lv${r.lev}</option>`).join('');
+    }).catch(() => {});
+
+    let timer = null;
+    const q = document.getElementById('q');
+    const results = document.getElementById('results');
+    q.addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        const s = q.value.trim();
+        if (!s) { results.innerHTML = ''; return; }
+        try {
+          const items = await AA.api('GET', '/api/items?q=' + encodeURIComponent(s));
+          results.innerHTML = items.map((it) => `
+            <a href="#" class="list-group-item list-group-item-action" data-id="${it.id}" data-name="${AA.esc(it.zh || it.name)}"
+               data-stack="${it.max_stack}" data-gear="${it.gear ? 1 : 0}" data-maxenchant="${it.maxEnchant}"
+               data-base="${it.baseSlots}" data-maxextra="${it.maxExtraSlots}">
+              <span class="aa-quality-${AA.esc(String(it.quality).toLowerCase())}">${AA.esc(it.zh || it.name)}</span>
+              <small class="text-muted ms-2">${it.id} · Lv${AA.esc(it.level)} · ${AA.esc(it.quality)}${it.max_stack > 1 ? ' · 可堆叠 ' + it.max_stack : ''}</small>
+            </a>`).join('') || '<div class="list-group-item text-muted">没有找到</div>';
+        } catch (e) { results.innerHTML = ''; }
+      }, 250);
+    });
+    results.addEventListener('click', (e) => {
+      const a = e.target.closest('a[data-id]');
+      if (!a) return;
+      e.preventDefault();
+      picked.push({ id: Number(a.dataset.id), name: a.dataset.name, stack: Number(a.dataset.stack),
+        gear: a.dataset.gear === '1', maxEnchant: Number(a.dataset.maxenchant),
+        base: Number(a.dataset.base), maxExtra: Number(a.dataset.maxextra), count: 1, enchant: 0, slots: 0 });
+      results.innerHTML = '';
+      q.value = '';
+      render();
+    });
+
+    function render() {
+      const tb = document.getElementById('list');
+      if (!picked.length) { tb.innerHTML = '<tr><td colspan="5" class="text-muted">还没有添加物品</td></tr>'; return; }
+      tb.innerHTML = picked.map((p, i) => `
+        <tr>
+          <td>${AA.esc(p.name)} <small class="text-muted">${p.id}</small></td>
+          <td><input type="number" class="form-control form-control-sm" min="1" max="${p.stack}" value="${p.count}" data-i="${i}" data-k="count"></td>
+          <td>${p.maxEnchant > 0 ? `<input type="number" class="form-control form-control-sm" min="0" max="${p.maxEnchant}" value="${p.enchant}" data-i="${i}" data-k="enchant">
+            <small class="text-muted">最高 +${p.maxEnchant}</small>` : '<span class="text-muted">不能强化</span>'}</td>
+          <td>${p.gear && p.maxExtra > 0 ? `<select class="form-control form-control-sm" data-i="${i}" data-k="slots">
+              ${Array.from({ length: p.maxExtra + 1 }, (_, v) => `<option value="${v}" ${p.slots === v ? 'selected' : ''}>${v}</option>`).join('')}
+            </select>
+            <small class="text-muted">自带 ${p.base} 孔，最多再加 ${p.maxExtra} 孔</small>`
+            : p.gear ? `<small class="text-muted">自带 ${p.base} 孔，不能再加</small>` : '<span class="text-muted">–</span>'}</td>
+          <td><button class="btn btn-sm btn-outline-danger" data-del="${i}"><i class="mdi mdi-delete"></i></button></td>
+        </tr>`).join('');
+    }
+    document.getElementById('list').addEventListener('input', (e) => {
+      const el = e.target;
+      if (el.dataset.i === undefined) return;
+      const p = picked[Number(el.dataset.i)];
+      let v = Math.max(0, Math.trunc(Number(el.value) || 0));
+      if (el.dataset.k === 'enchant' && v > p.maxEnchant) { v = p.maxEnchant; el.value = v; }
+      if (el.dataset.k === 'count' && v > p.stack) { v = p.stack; el.value = v; }
+      p[el.dataset.k] = v;
+    });
+    document.getElementById('list').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-del]');
+      if (!b) return;
+      picked.splice(Number(b.dataset.del), 1);
+      render();
+    });
+
+    document.getElementById('send').addEventListener('click', async () => {
+      const to = document.getElementById('to').value.split(/[,，\s]+/).filter(Boolean);
+      const body = {
+        to,
+        items: picked.map((p) => ({ id: p.id, count: p.count, enchant: p.enchant, slots: p.slots })),
+        money: Number(document.getElementById('money').value) || 0,
+        title: document.getElementById('title').value,
+        content: document.getElementById('content').value,
+        sender: document.getElementById('sender').value,
+        mode: document.getElementById('mode').value,
+      };
+      const summary = picked.map((p) => `${p.name} x${p.count}${p.enchant ? ' +' + p.enchant : ''}`).join('、') || '（无物品）';
+      if (!confirm(`确认发送？\n\n收件人：${to.join('、')}\n物品：${summary}\n基纳：${body.money}`)) return;
+      const btn = document.getElementById('send');
+      btn.disabled = true;
+      try {
+        const r = await AA.api('POST', '/api/mail', body);
+        AA.toast(`已发送 ${r.sent} 封邮件`);
+        document.getElementById('result').innerHTML = `
+          <p class="mb-1">已写入 <b>${r.sent}</b> 封邮件给：${r.receivers.map(AA.esc).join('、')}</p>
+          <ul class="ps-3 mb-0">${r.items.map((it) => `<li>${AA.esc(it.name)} x${it.count}${it.enchant ? ' +' + it.enchant : ''}${it.sockets ? '，' + it.sockets + ' 孔' : ''}</li>`).join('')}</ul>`;
+        picked.length = 0;
+        render();
+      } catch (e) {
+        AA.toast('发送失败：' + e.message, 'danger');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

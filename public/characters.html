@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>角色管理 · 永恒之塔 GM</title>
+  <link rel="stylesheet" href="vendors/mdi/css/materialdesignicons.min.css">
+  <link rel="stylesheet" href="vendors/base/vendor.bundle.base.css">
+  <link rel="stylesheet" href="vendors/datatables.net-bs4/dataTables.bootstrap4.css">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="shortcut icon" href="images/favicon.png" />
+</head>
+<body>
+  <div class="container-scroller">
+    <div id="aa-navbar"></div>
+    <div class="container-fluid page-body-wrapper">
+      <div id="aa-sidebar"></div>
+      <div class="main-panel">
+        <div class="content-wrapper">
+          <div class="row">
+            <div class="col-md-12 grid-margin">
+              <h2>角色管理</h2>
+              <p class="text-muted mb-0">点击角色名查看详情和背包。</p>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-12 stretch-card">
+              <div class="card">
+                <div class="card-body">
+                  <div class="table-responsive">
+                    <table id="tbl" class="table w-100">
+                      <thead>
+                        <tr><th>ID</th><th>角色</th><th>账号</th><th>种族</th><th>职业</th><th>等级</th><th>GM</th><th>地图</th><th>创建时间</th><th>最近登录</th></tr>
+                      </thead>
+                      <tbody></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="aa-footer"></div>
+      </div>
+    </div>
+  </div>
+  <script src="vendors/base/vendor.bundle.base.js"></script>
+  <script src="js/app.js"></script>
+  <script src="vendors/datatables.net/jquery.dataTables.js"></script>
+  <script src="vendors/datatables.net-bs4/dataTables.bootstrap4.js"></script>
+  <script src="js/off-canvas.js"></script>
+  <script src="js/hoverable-collapse.js"></script>
+  <script src="js/template.js"></script>
+  <script>
+    const ZH = {
+      search: '搜索：', lengthMenu: '每页 _MENU_ 条', info: '第 _START_–_END_ 条，共 _TOTAL_ 条', infoEmpty: '没有数据',
+      infoFiltered: '（从 _MAX_ 条中筛选）', zeroRecords: '没有匹配的角色', emptyTable: '没有角色',
+      paginate: { first: '首页', last: '末页', next: '下一页', previous: '上一页' },
+    };
+    (async function () {
+      try {
+        const rows = await AA.api('GET', '/api/characters');
+        $('#tbl').DataTable({
+          data: rows,
+          order: [[9, 'desc']],
+          pageLength: 25,
+          language: ZH,
+          columns: [
+            { data: 'char_id' },
+            { data: 'user_id', render: (v, t, r) => t === 'display' ? `<a href="character.html?id=${r.char_id}">${AA.esc(v)}</a>` + (r.delete_date ? ' <span class="badge bg-secondary">已删除</span>' : '') : v },
+            { data: 'account_name', render: (v) => AA.esc(v) },
+            { data: 'race', render: (v, t) => t === 'display' ? AA.raceBadge(v) : AA.RACES[v] },
+            { data: 'class', render: (v) => AA.CLASSES[v] ?? v },
+            { data: 'lev' },
+            { data: 'builder', render: (v, t) => t === 'display' ? (v === '1' ? '<span class="badge bg-warning">GM</span>' : '') : v },
+            { data: 'world' },
+            { data: 'create_date', render: (v, t) => t === 'display' ? AA.fmtTime(v) : v },
+            { data: 'last_login_time', render: (v, t) => t === 'display' ? AA.fmtTime(v) : v },
+          ],
+        });
+      } catch (e) {
+        AA.toast('加载角色失败：' + e.message, 'danger');
+      }
+    })();
+  </script>
+</body>
+</html>
