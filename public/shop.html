@@ -405,7 +405,9 @@
       const q = $('g-search').value.trim();
       if (!q) { $('g-results').classList.add('d-none'); return; }
       searchTimer = setTimeout(async () => {
-        const rs = await AA.api('GET', '/api/items?q=' + encodeURIComponent(q)).catch(() => []);
+        let rs;
+        try { rs = await AA.api('GET', '/api/items?q=' + encodeURIComponent(q)); }
+        catch (e) { $('g-results').innerHTML = `<div class="text-danger">${esc(e.message)}</div>`; $('g-results').classList.remove('d-none'); return; }
         for (const r of rs) items[r.id] = { zh: r.zh || r.name, en: r.en || r.name, name: r.name, max_stack: r.max_stack, quality: r.quality, level: r.level };
         $('g-results').innerHTML = rs.map((r) => `<div data-item="${r.id}"><b>${esc(iname(items[r.id]))}</b> <span class="aa-mono text-muted">${r.id}</span>
           <small class="text-muted">· ${AA.quality(r.quality)} · ${t('{0} 级', r.level)} · ${t('堆叠 {0}', r.max_stack)}</small></div>`).join('') || `<div class="text-muted">${t('没找到')}</div>`;

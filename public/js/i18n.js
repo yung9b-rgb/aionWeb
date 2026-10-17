@@ -110,6 +110,7 @@ window.AA_I18N_EN = {
   "端口": "Port",
   "最近登录的角色": "Recently logged-in characters",
   "数据库连接失败：{0}": "Database connection failed: {0}",
+  "没有物品缓存：物品名会显示成编号，发送物品和商城编辑用不了。先用 tools/build_items_cache.py 生成 data/items_cache.json（见 README）。": "No item cache: items show as IDs, and Send Items and the shop editor will not work. Generate data/items_cache.json with tools/build_items_cache.py first (see README).",
   "认证网关 AuthGateD": "Auth gateway AuthGateD",
   "认证服务器 L2AuthD": "Auth server L2AuthD",
   "账号缓存 AccountCache": "Account cache AccountCache",

@@ -132,7 +132,7 @@
               <span class="aa-quality-${AA.esc(String(it.quality).toLowerCase())}">${AA.esc(AA.itemName(it))}</span>
               <small class="text-muted ms-2">${it.id} · Lv${AA.esc(it.level)} · ${AA.esc(AA.quality(it.quality))}${it.max_stack > 1 ? ' · ' + AA.t('可堆叠 {0}', it.max_stack) : ''}</small>
             </a>`).join('') || `<div class="list-group-item text-muted">${AA.t('没有找到')}</div>`;
-        } catch (e) { results.innerHTML = ''; }
+        } catch (e) { results.innerHTML = `<div class="list-group-item text-danger">${AA.esc(e.message)}</div>`; }
       }, 250);
     });
     results.addEventListener('click', (e) => {

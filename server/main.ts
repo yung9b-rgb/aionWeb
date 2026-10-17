@@ -6,7 +6,7 @@ import { ROOT, loadConfig, loadSecrets, saveSecrets } from './config.ts';
 import { COOKIE, hashPassword, verifyPassword, issueToken, verifyToken, parseCookies, sessionCookie, clearCookie } from './auth.ts';
 import { announce } from './cached.ts';
 import { serviceStatus, summary, listCharacters, getCharacter, sendMail, validateMailItems, listAccounts, findCashMail } from './game.ts';
-import { loadItems, searchItems } from './items.ts';
+import { loadItems, tryLoadItems, itemsCacheExists, searchItems } from './items.ts';
 import { GmProxy } from './gmproxy.ts';
 import { ShopServer } from './shopserver.ts';
 import { ShopAgentServer } from './shopagent.ts';
@@ -138,7 +138,7 @@ route('GET', '/api/status', async () => {
     serviceStatus(cfg, proxy.running ? { [cfg.proxy.listenPort]: true } : {}),
     summary(cfg).catch((e: Error) => ({ error: e.message })),
   ]);
-  return { services, summary: sum, cached: `${cfg.cached.host}:${cfg.cached.port}` };
+  return { services, summary: sum, cached: `${cfg.cached.host}:${cfg.cached.port}`, itemsCache: itemsCacheExists(cfg.itemsCache) };
 });
 
 // ---- announce (CacheD GQ_ANNOUNCE) ----
@@ -166,7 +166,7 @@ route('GET', '/api/characters/(\\d+)', async (_req, _url, m) => {
 route('GET', '/api/items', async (_req, url) => searchItems(loadItems(cfg.itemsCache), url.searchParams.get('q') ?? ''));
 // Batch lookup by item id (shop editor shows names / max stack for the goods it lists).
 route('GET', '/api/items/info', async (_req, url) => {
-  const db = loadItems(cfg.itemsCache);
+  const db = tryLoadItems(cfg.itemsCache);
   const ids = (url.searchParams.get('ids') ?? '').split(',').map(Number).filter((x) => Number.isInteger(x) && x > 0).slice(0, 2000);
   return Object.fromEntries(ids.map((id) => {
     const it = db.get(id);

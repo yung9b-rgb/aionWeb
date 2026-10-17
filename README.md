@@ -15,7 +15,7 @@
 
 所有对接都按服务端原生协议实现，**不修改主服务器、CacheD 和客户端**。这些协议是通过反汇编 `Server64` / `CacheD64`（随服务端附带的 PDB 符号）得出的，见下文「协议」。
 
-> 本项目仅供学习研究。不包含任何游戏服务端或客户端文件。
+> 本项目仅供学习研究。不包含任何游戏服务端、客户端文件或从中提取的游戏数据。
 
 ---
 
@@ -82,8 +82,9 @@ npm start
    - `db.dockerContainer`：SQL Server 所在的 docker 容器名；
    - `cached`：CacheD 管理端口；
    - `proxy` / `shop` / `shopAgent`：三个内置服务的监听地址和端口。
-2. 打开 http://127.0.0.1:8088/ ，第一次访问时设置管理密码（只存哈希，在 `data/secrets.json`）。
-3. 后台默认只监听本机。
+2. 生成物品缓存，见下文「物品缓存」。
+3. 打开 http://127.0.0.1:8088/ ，第一次访问时设置管理密码（只存哈希，在 `data/secrets.json`）。
+4. 后台默认只监听本机。
 
 ### 数据库 AionShop
 
@@ -114,6 +115,23 @@ RESTORE DATABASE AionShop FROM DISK = '/var/opt/mssql/backup/AionShop.bak'
 
 GM 命令代理：客户端连代理端口（默认 7779），代理转发到主服务器（7777）。注意代理在后台进程里，重启后台会断开经过代理的游戏连接。
 
+### 物品缓存（需要自己生成）
+
+物品名称、品质、堆叠上限、魔石孔、强化上限这些信息来自游戏数据，**仓库里不提供**，要用自己的服务端和客户端文件生成 `data/items_cache.json`（需要 Python 3）：
+
+```bash
+py tools/build_items_cache.py --items <服务端>/Map/XML/L10N/items.xml --zh <客户端中文字符串> --en <客户端英文字符串>
+```
+
+- `--zh` / `--en` 至少给一个，可以是：
+  - 一个目录，里面有 `strings/*.xml`（或者直接就是这些 xml 文件）；
+  - 一个标准 ZIP 格式的 `.zip` / `.pak`，里面有 `strings/*.xml`。
+- 字符串文件可以是文本 XML（UTF-8 或 UTF-16），也可以是客户端的二进制 XML，脚本都能读。
+- 客户端自带的语言包（`l10n/<语言>/data/Data.pak`）不是标准 ZIP，要先用 pak 工具转成 zip 或解包。
+- 某种语言没给时，物品名退回服务端的内部名。
+
+没有这个文件时后台也能启动：仪表盘会提示，角色背包里的物品显示成编号，「发送物品」和商城编辑器里的物品搜索用不了。生成之后不用重启，刷新页面即可。
+
 ## 目录
 
 | 路径 | 说明 |
@@ -131,20 +149,9 @@ GM 命令代理：客户端连代理端口（默认 7779），代理转发到主
 | `server/i18n.ts` | 服务端双语消息：按请求头 `X-Lang` 返回中文或英文 |
 | `public/` | 前端页面；界面基于 Majestic Admin 模板 |
 | `public/js/i18n.js` | 英文词典，以中文原文为键 |
-| `data/items_cache.json` | 物品缓存：服务端 `items.xml` + 客户端中文、英文字符串 |
-| `tools/build_items_cache.py` | 重新生成物品缓存 |
+| `tools/build_items_cache.py` | 生成物品缓存 `data/items_cache.json`（不在仓库里，见「物品缓存」） |
 | `data/shop.json` | 初始商品目录（数据库为空时导入） |
 | `db/` | 建表 SQL 和脱敏示例备份 |
-
-### 物品缓存
-
-`data/items_cache.json` 是物品名称、品质、堆叠、魔石孔等信息的缓存，已经随仓库提供。换了服务端或客户端数据时可以重新生成（需要 Python 3）：
-
-```bash
-py tools/build_items_cache.py --items <服务端 items.xml> --zh <客户端中文 strings 目录> --en <客户端英文 strings 目录>
-```
-
-字符串目录是从客户端 pak 解出来的 `strings/*.xml`（文本 XML）。生成后重启后台生效。
 
 ## 协议
 

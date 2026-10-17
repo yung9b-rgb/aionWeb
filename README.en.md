@@ -15,7 +15,7 @@ A GM admin for an Aion 2.7 private server. One Node.js process replaces several 
 
 Everything speaks the servers' native protocols. **The main server, CacheD and the client are not modified.** The protocols were worked out by disassembling `Server64` / `CacheD64` (with the PDB symbols that ship with the server); see "Protocols" below.
 
-> For study and research only. No game server or client files are included.
+> For study and research only. No game server or client files, and no game data extracted from them, are included.
 
 ---
 
@@ -82,8 +82,9 @@ Or double-click `start_admin.bat`: the first run installs the dependencies and o
    - `db.dockerContainer`: the docker container that runs SQL Server;
    - `cached`: the CacheD admin port;
    - `proxy` / `shop` / `shopAgent`: listen address and port of the three built-in services.
-2. Open http://127.0.0.1:8088/ and set the admin password on the first visit (only a hash is stored, in `data/secrets.json`).
-3. The admin listens on localhost only by default.
+2. Generate the item cache, see "Item cache" below.
+3. Open http://127.0.0.1:8088/ and set the admin password on the first visit (only a hash is stored, in `data/secrets.json`).
+4. The admin listens on localhost only by default.
 
 ### The AionShop database
 
@@ -114,15 +115,22 @@ The main server reads these only at start. After that, when the admin restarts, 
 
 GM command proxy: the client connects to the proxy port (7779 by default) and the proxy forwards to the main server (7777). The proxy runs inside the admin process, so restarting the admin drops game connections that go through it.
 
-### Item cache
+### Item cache (generate it yourself)
 
-`data/items_cache.json` caches item names, quality, stack size, sockets and so on, and ships with the repository. When the server or client data changes, regenerate it (needs Python 3):
+Item names, quality, stack limits, sockets and enchant limits come from game data, which is **not included in the repository**. Generate `data/items_cache.json` from your own server and client files (needs Python 3):
 
 ```bash
-py tools/build_items_cache.py --items <server items.xml> --zh <client Chinese strings folder> --en <client English strings folder>
+py tools/build_items_cache.py --items <server>/Map/XML/L10N/items.xml --zh <client Chinese strings> --en <client English strings>
 ```
 
-The string folders are the `strings/*.xml` files (text XML) unpacked from the client paks. Restart the admin afterwards.
+- Give at least one of `--zh` / `--en`. Each can be:
+  - a folder holding `strings/*.xml` (or those xml files themselves);
+  - a `.zip` / `.pak` in standard ZIP format that contains `strings/*.xml`.
+- The string files can be text XML (UTF-8 or UTF-16) or the client's binary XML; the script reads both.
+- The language paks shipped with the client (`l10n/<lang>/data/Data.pak`) are not standard ZIP files: convert one to a zip or unpack it with a pak tool first.
+- For a language you leave out, item names fall back to the server's internal names.
+
+The admin starts without the file too: the dashboard shows a warning, items in a character's inventory show as IDs, and item search in "Send Items" and the shop editor does not work. Once it is generated, just reload the page; no restart needed.
 
 ## Layout
 
@@ -141,8 +149,7 @@ The string folders are the `strings/*.xml` files (text XML) unpacked from the cl
 | `server/i18n.ts` | Bilingual server messages: Chinese or English according to the `X-Lang` request header |
 | `public/` | Front-end pages; the UI is based on the Majestic Admin template |
 | `public/js/i18n.js` | English dictionary, keyed by the Chinese source text |
-| `data/items_cache.json` | Item cache: server `items.xml` + the client's Chinese and English strings |
-| `tools/build_items_cache.py` | Regenerates the item cache |
+| `tools/build_items_cache.py` | Generates the item cache `data/items_cache.json` (not in the repository, see "Item cache") |
 | `data/shop.json` | Initial catalog (imported when the database is empty) |
 | `db/` | Schema SQL and the sanitized sample backup |
 

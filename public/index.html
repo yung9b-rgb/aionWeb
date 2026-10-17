@@ -85,6 +85,7 @@
                     </table>
                   </div>
                   <p class="text-danger mb-0" id="db-err"></p>
+                  <p class="text-warning mb-0 d-none" id="cache-warn">没有物品缓存：物品名会显示成编号，发送物品和商城编辑用不了。先用 tools/build_items_cache.py 生成 data/items_cache.json（见 README）。</p>
                 </div>
               </div>
             </div>
@@ -113,6 +114,7 @@
             <td class="aa-mono">${s.port ? `<span class="aa-status-dot ${s.portOpen ? 'on' : 'off'}"></span>${s.port}` : '<span class="text-muted">–</span>'}</td>
             <td>${s.ok ? `<span class="badge bg-success">${AA.t('正常')}</span>` : `<span class="badge bg-danger">${AA.t('未运行')}</span>`}</td>
           </tr>`).join('');
+        document.getElementById('cache-warn').classList.toggle('d-none', d.itemsCache !== false);
         const sum = d.summary;
         if (sum.error) {
           document.getElementById('db-err').textContent = AA.t('数据库连接失败：{0}', sum.error);

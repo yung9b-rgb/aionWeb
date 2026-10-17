@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process';
 import net from 'node:net';
 import type { Config } from './config.ts';
 import { pool, sql } from './db.ts';
-import { loadItems, itemLabel, itemName, baseSlots, isGear, maxEnchant } from './items.ts';
+import { loadItems, tryLoadItems, itemLabel, itemName, baseSlots, isGear, maxEnchant } from './items.ts';
 import { LError, type Lang } from './i18n.ts';
 import { mailSend } from './cached.ts';
 
@@ -96,7 +96,7 @@ export async function getCharacter(cfg: Config, id: number) {
     SELECT id, name_id, slot_id, amount, slot, warehouse, soul_bound, enchant_count, option_count, proc_tool_nameid,
            stat_enchant_0, stat_enchant_1, stat_enchant_2, stat_enchant_3, stat_enchant_4, stat_enchant_5, create_date
     FROM user_item WHERE char_id = @id ORDER BY warehouse, slot_id`);
-  const db = loadItems(cfg.itemsCache);
+  const db = tryLoadItems(cfg.itemsCache);   // without the cache items are shown by id
   for (const it of items.recordset) {
     const info = db.get(it.name_id);
     it.item_name = itemLabel(db, it.name_id);

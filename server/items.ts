@@ -1,21 +1,35 @@
-// Item names/attributes from the cache built by Tools/gm-mail/gm_mail.py (items.xml + client strings).
+// Item names/attributes from data/items_cache.json, built by tools/build_items_cache.py (server items.xml + client strings).
+// The cache is not shipped with the code (it is game data): each install generates it from its own server and client.
 import fs from 'node:fs';
+import { LError } from './i18n.ts';
 
 export type ItemInfo = {
   name: string; zh: string; max_stack: number; quality: string; level: string; tradable: boolean;
   item_type: string; slot_bonus: number; equip: boolean; no_enchant: boolean;
-  en?: string;   // English name from the client's English strings (added by Tools/add_item_en.py)
+  en?: string;   // English name from the client's English strings
 };
 
 let items: Map<number, ItemInfo> | null = null;
 
+export const itemsCacheExists = (path: string) => items !== null || fs.existsSync(path);
+
+// Throws a readable error while the cache has not been generated (checked again on every call, so generating it
+// does not need a restart); tryLoadItems returns an empty map instead, for pages that can live with item ids.
 export function loadItems(path: string): Map<number, ItemInfo> {
+  if (!items && !fs.existsSync(path)) {
+    throw new LError('没有物品缓存 data/items_cache.json：先用 tools/build_items_cache.py 从服务端和客户端文件生成（见 README）',
+      'No item cache data/items_cache.json: generate it from your server and client files with tools/build_items_cache.py (see README)');
+  }
   if (!items) {
     const raw = JSON.parse(fs.readFileSync(path, 'utf8'));
     items = new Map();
     for (const [k, v] of Object.entries(raw)) if (/^\d+$/.test(k)) items.set(Number(k), v as ItemInfo);
   }
   return items;
+}
+
+export function tryLoadItems(path: string): Map<number, ItemInfo> {
+  return itemsCacheExists(path) ? loadItems(path) : new Map();
 }
 
 export function itemLabel(db: Map<number, ItemInfo>, id: number, lang: 'zh' | 'en' = 'zh'): string {
