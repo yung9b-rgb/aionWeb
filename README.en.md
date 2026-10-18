@@ -66,40 +66,11 @@ game client ──► (GM command proxy 7779) ──► main server Server64 ─
 ## Requirements
 
 - Windows (the server itself is Windows software), Node.js **22.18 or newer** (24 LTS recommended; it runs TypeScript directly, no build step).
-- SQL Server 2022, preferably in Docker inside WSL2 (image `mcr.microsoft.com/mssql/server:2022-latest`, see "Preparing SQL Server" below). The sa password is read at runtime from the container's environment (`MSSQL_SA_PASSWORD` / `SA_PASSWORD`) and **never written to any file**.
+- SQL Server 2016 or newer (tested with 2022), installed directly on Windows or reachable on the LAN. **No Docker, WSL, ODBC driver or native module is needed**: the admin talks TCP with the pure-JavaScript `mssql` driver and uses SQL Server authentication (`sa` or a dedicated login).
+- TCP/IP must be enabled on the instance. For a named instance (e.g. `SQLEXPRESS`) the SQL Server Browser service (UDP 1434) must run, or put the TCP port in `db.port` directly.
 - The Aion 2.7 server (Server64, CacheD64 …), not part of this repository.
 
 ## Setup
-
-### Preparing SQL Server (WSL + Docker recommended)
-
-Running Microsoft's official SQL Server 2022 image `mcr.microsoft.com/mssql/server:2022-latest` with Docker inside WSL2 (e.g. Ubuntu) is the recommended setup, and the one this project is developed on. The admin reads the sa password with `wsl -e docker inspect <container>`, so `wsl docker ps` run from a Windows prompt must list the container (Docker Engine installed in WSL, or Docker Desktop with WSL integration enabled, both work).
-
-In WSL:
-
-```bash
-mkdir -p ~/mssql/data ~/mssql/backup
-sudo chown -R 10001:0 ~/mssql          # SQL Server in the image runs as uid 10001 and must be able to write the mounts
-
-docker run -d --name mssql --restart unless-stopped \
-  -e ACCEPT_EULA=Y -e MSSQL_PID=Developer \
-  -e MSSQL_SA_PASSWORD='<your strong password>' \
-  -e MSSQL_COLLATION=Chinese_PRC_CI_AS \
-  -p 1433:1433 \
-  -v ~/mssql/data:/var/opt/mssql/data \
-  -v ~/mssql/backup:/var/opt/mssql/backup \
-  mcr.microsoft.com/mssql/server:2022-latest
-```
-
-- **Version**: use 2022. A backup restores only to the same or a newer SQL Server, so game database backups in 2022 format cannot be restored on older versions.
-- **sa password**: at least 8 characters with three of uppercase, lowercase, digits and symbols, or the container exits right after starting (`docker logs mssql` shows why). The password lives only in the container's environment; neither the admin nor this repository stores it.
-- **Collation**: the game databases use `Chinese_PRC_CI_AS`. Giving the server the same collation avoids collation conflicts with temp tables in stored procedures. It only applies when the data folder is first created; the `AionShop` database sets its own collation when it is created.
-- The **Developer edition** is free and licensed for development and testing only.
-- WSL2 forwards the port to Windows; the server's ODBC connections and the admin both use `127.0.0.1,1433`.
-- Put the container name in `db.dockerContainer` in `config.json` (default: `mssql`).
-- `.bak` files to restore go in `~/mssql/backup`, which is `/var/opt/mssql/backup` inside the container.
-
-### Starting the admin
 
 ```bash
 npm install
@@ -109,26 +80,45 @@ npm start
 Or double-click `start_admin.bat`: the first run installs the dependencies and opens the browser.
 
 1. The first start writes `config.json` with default values; adjust it using `config.example.json`:
-   - `db.dockerContainer`: the docker container that runs SQL Server;
+   - `db.server`: the SQL Server address. A default instance is `127.0.0.1`; a named instance is `127.0.0.1\SQLEXPRESS` (written as `127.0.0.1\\SQLEXPRESS` inside the JSON file); `127.0.0.1,1433` also works;
+   - `db.port`: TCP port, `0` means automatic (1433 for a default instance, SQL Server Browser lookup for a named one);
+   - `db.instanceName`: the named instance, optional; to avoid escaping a backslash in JSON, keep `db.server` as `127.0.0.1` and put `SQLEXPRESS` here;
+   - `db.database`: the game database, `AionGame` by default;
+   - `db.user` / `db.password`: the SQL login. It is better to leave the password empty and set the `AION_DB_PASSWORD` environment variable (`MSSQL_SA_PASSWORD` / `SA_PASSWORD` also work), so the password is not written to a file;
    - `cached`: the CacheD admin port;
    - `proxy` / `shop` / `shopAgent`: listen address and port of the three built-in services.
-2. Generate the item cache, see "Item cache" below.
-3. Open http://127.0.0.1:8088/ and set the admin password on the first visit (only a hash is stored, in `data/secrets.json`).
-4. The admin listens on localhost only by default.
+2. Run `npm run db:check` to verify the database connection (see below).
+3. Generate the item cache, see "Item cache" below.
+4. Open http://127.0.0.1:8088/ and set the admin password on the first visit (only a hash is stored, in `data/secrets.json`).
+5. The admin listens on localhost only by default.
+
+### Checking the database connection
+
+```bash
+npm run db:check
+```
+
+It connects with exactly the same code as the admin, prints the server version, login, permissions and existing databases, and confirms that `db.database` contains the `user_data` table. The password is never printed. On failure it points at the usual causes (TCP/IP disabled, SQL authentication disabled, wrong instance name or port, SQL Server Browser not running).
+
+Migrating from the old Docker setup: remove `db.dockerContainer` from `config.json` and put the SA password into `db.password` or the `AION_DB_PASSWORD` environment variable. Nothing else changes.
+
+SQL Server in Docker works the same way (e.g. `mcr.microsoft.com/mssql/server:2022-latest` in WSL2 with `-p 1433:1433`): set `db.server` to `127.0.0.1` and use the container's sa password; it is just a normal TCP connection.
 
 ### The AionShop database
 
-On start the `AionShop` database and all its tables are created (running it again is harmless), and `data/shop.json` is imported as the initial catalog when the database is empty.
+On start the `AionShop` database and all its tables are created (running it again is harmless), and `data/shop.json` is imported as the initial catalog when the database is empty. The `db.user` login therefore needs `dbcreator`; if you do not want to grant that, create the `AionShop` database and grant access yourself and the program will only create the tables.
 
 `db/` contains:
 - `AionShop_schema.sql`: the table definitions, exactly what the program runs at start, for reading;
 - `AionShop.bak`: a **sanitized** sample backup (SQL Server 2022). Account names are blanked, account and character IDs renumbered, character names replaced with 「角色N」 ("character N"), and the admin log is empty. Restore it to see sample orders and ledger entries:
 
 ```sql
-RESTORE DATABASE AionShop FROM DISK = '/var/opt/mssql/backup/AionShop.bak'
-  WITH MOVE 'AionShop' TO '/var/opt/mssql/data/AionShop.mdf',
-       MOVE 'AionShop_log' TO '/var/opt/mssql/data/AionShop_log.ldf';
+RESTORE DATABASE AionShop FROM DISK = N'C:\AionWeb\db\AionShop.bak'
+  WITH MOVE 'AionShop' TO N'C:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\DATA\AionShop.mdf',
+       MOVE 'AionShop_log' TO N'C:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\DATA\AionShop_log.ldf';
 ```
+
+Adjust the `.mdf` / `.ldf` paths for your instance: a default instance normally uses `...\MSSQL16.MSSQLSERVER\MSSQL\DATA` (SQL Server 2022; 2019 uses `MSSQL15`), and a named instance uses `MSSQL16.<instance name>`.
 
 ### Server configuration
 
@@ -173,13 +163,14 @@ The admin starts without the file too: the dashboard shows a warning, items in a
 | `server/shopserver.ts` | Shop catalog service (peer of the main server's ShopClient) |
 | `server/shopagent.ts` | Points service (peer of the main server's ShopAgentClient): balances, buying, delivery, redelivery |
 | `server/shopdb.ts` | `AionShop` schema and data access for points, orders, catalog and admin log |
-| `server/db.ts` | SQL Server connection pools (per database; the sa password comes from the container environment) |
+| `server/db.ts` | SQL Server connection pools (per database; pure-JS driver over TCP, password from `config.json` or an environment variable) |
 | `server/items.ts` | Item data: names, quality, max stack, sockets, enchant limits |
 | `server/config.ts` | Config loading (relative paths resolve against the project folder) |
 | `server/i18n.ts` | Bilingual server messages: Chinese or English according to the `X-Lang` request header |
 | `public/` | Front-end pages; the UI is based on the Majestic Admin template |
 | `public/js/i18n.js` | English dictionary, keyed by the Chinese source text |
 | `tools/build_items_cache.py` | Generates the item cache `data/items_cache.json` (not in the repository, see "Item cache") |
+| `tools/check_db.ts` | `npm run db:check`: verifies the SQL Server connection without starting the admin |
 | `data/shop.json` | Initial catalog (imported when the database is empty) |
 | `db/` | Schema SQL and the sanitized sample backup |
 
@@ -239,5 +230,6 @@ A purchase runs in one database transaction: duplicate check, balance lock, char
 
 ## Credits
 
+- RaGEZONE member **Mr. House** contributed the direct SQL Server connection (no more Docker / WSL dependency) and the `npm run db:check` connection check.
 - UI template: [Majestic Admin](https://github.com/BootstrapDash/MajesticAdmin-Free-Bootstrap-Admin-Template) (MIT).
 - The delivery warehouse table of NCsoft's original ShopAgent (buyer and recipient kept separately, an external request key against duplicates) was a useful reference.

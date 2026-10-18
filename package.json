@@ -8,7 +8,8 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "start": "node server/main.ts"
+    "start": "node server/main.ts",
+    "db:check": "node tools/check_db.ts"
   },
   "dependencies": {
     "mssql": "^12.7.9"

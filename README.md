@@ -66,40 +66,11 @@
 ## 运行环境
 
 - Windows（服务端本身就是 Windows 程序），Node.js **22.18 以上**（推荐 24 LTS，直接运行 TypeScript，不用编译）。
-- SQL Server 2022，推荐用 WSL2 里的 Docker 运行（镜像 `mcr.microsoft.com/mssql/server:2022-latest`，见下文「准备 SQL Server」）。sa 密码在运行时从容器的环境变量（`MSSQL_SA_PASSWORD` / `SA_PASSWORD`）读取，**不写进任何文件**。
+- SQL Server 2016 以上（实测 2022），直接装在 Windows 上或局域网内已有实例即可。**不需要 Docker、WSL、ODBC 驱动或原生模块**：后台用纯 JavaScript 的 `mssql` 驱动通过 TCP 连接，只支持 SQL Server 身份验证（`sa` 或专用账号）。
+- 实例要启用 TCP/IP；命名实例（如 `SQLEXPRESS`）还需要 SQL Server Browser 服务（UDP 1434），或者在 `db.port` 里直接写端口。
 - 永恒之塔 2.7 服务端（Server64、CacheD64 等），不在本仓库内。
 
 ## 安装
-
-### 准备 SQL Server（推荐 WSL + Docker）
-
-推荐在 WSL2（如 Ubuntu）里用 Docker 跑微软官方的 SQL Server 2022 镜像 `mcr.microsoft.com/mssql/server:2022-latest`，作者就是这样跑的。后台通过 `wsl -e docker inspect <容器名>` 读取 sa 密码，所以要保证在 Windows 命令行里执行 `wsl docker ps` 能看到这个容器（WSL 里装 Docker Engine，或者 Docker Desktop 开启 WSL 集成都可以）。
-
-在 WSL 里执行：
-
-```bash
-mkdir -p ~/mssql/data ~/mssql/backup
-sudo chown -R 10001:0 ~/mssql          # 镜像里的 SQL Server 以 uid 10001 运行，挂载目录要给它写权限
-
-docker run -d --name mssql --restart unless-stopped \
-  -e ACCEPT_EULA=Y -e MSSQL_PID=Developer \
-  -e MSSQL_SA_PASSWORD='<你的强密码>' \
-  -e MSSQL_COLLATION=Chinese_PRC_CI_AS \
-  -p 1433:1433 \
-  -v ~/mssql/data:/var/opt/mssql/data \
-  -v ~/mssql/backup:/var/opt/mssql/backup \
-  mcr.microsoft.com/mssql/server:2022-latest
-```
-
-- **版本**：用 2022。数据库备份只能还原到同版本或更新的 SQL Server，游戏库备份是 2022 格式时，旧版本还原不了。
-- **sa 密码**：至少 8 位，并包含大写、小写、数字、符号中的三类，否则容器会启动后马上退出（`docker logs mssql` 可以看到原因）。密码只存在容器的环境变量里，后台和本仓库都不保存。
-- **排序规则**：游戏库是 `Chinese_PRC_CI_AS`。服务器排序规则设成一样，可以避免存储过程里临时表的排序规则冲突。这个设置只在第一次创建数据目录时生效，`AionShop` 库建库时会自己指定排序规则。
-- **Developer 版**免费，许可上只能用于开发和测试。
-- WSL2 会把端口转发到 Windows，服务端的 ODBC 和本后台都连 `127.0.0.1,1433`。
-- 容器名填到 `config.json` 的 `db.dockerContainer`（默认就是 `mssql`）。
-- 要还原的 `.bak` 放进 `~/mssql/backup`，在容器里就是 `/var/opt/mssql/backup`。
-
-### 启动后台
 
 ```bash
 npm install
@@ -109,26 +80,45 @@ npm start
 或者双击 `start_admin.bat`：第一次运行会自动安装依赖并打开浏览器。
 
 1. 第一次启动会按默认值生成 `config.json`，参考 `config.example.json` 修改：
-   - `db.dockerContainer`：SQL Server 所在的 docker 容器名；
+   - `db.server`：SQL Server 地址。默认实例写 `127.0.0.1`；命名实例写 `127.0.0.1\SQLEXPRESS`（在 JSON 文件里要写成 `127.0.0.1\\SQLEXPRESS`），也可以写成 `127.0.0.1,1433`；
+   - `db.port`：TCP 端口，`0` 表示自动（默认实例用 1433，命名实例通过 SQL Server Browser 查找）；
+   - `db.instanceName`：命名实例名，可留空；不想在 JSON 里转义反斜杠时，可以 `db.server` 写 `127.0.0.1`、这里写 `SQLEXPRESS`；
+   - `db.database`：游戏库，默认 `AionGame`；
+   - `db.user` / `db.password`：SQL 登录账号。密码建议留空，改设环境变量 `AION_DB_PASSWORD`（也兼容 `MSSQL_SA_PASSWORD` / `SA_PASSWORD`），这样密码不会写进文件；
    - `cached`：CacheD 管理端口；
    - `proxy` / `shop` / `shopAgent`：三个内置服务的监听地址和端口。
-2. 生成物品缓存，见下文「物品缓存」。
-3. 打开 http://127.0.0.1:8088/ ，第一次访问时设置管理密码（只存哈希，在 `data/secrets.json`）。
-4. 后台默认只监听本机。
+2. 用 `npm run db:check` 检查数据库连接（见下）。
+3. 生成物品缓存，见下文「物品缓存」。
+4. 打开 http://127.0.0.1:8088/ ，第一次访问时设置管理密码（只存哈希，在 `data/secrets.json`）。
+5. 后台默认只监听本机。
+
+### 检查数据库连接
+
+```bash
+npm run db:check
+```
+
+它会用和后台相同的连接代码连一次 SQL Server，打印服务器版本、登录名、权限和现有数据库，并确认 `db.database` 里有 `user_data` 表；密码不会打印。连接失败时会提示常见原因（TCP/IP 没启用、SQL 身份验证被禁用、实例名或端口不对、SQL Server Browser 没启动）。
+
+从旧版（Docker）配置迁移：删掉 `config.json` 里的 `db.dockerContainer`，把 SA 密码填到 `db.password` 或环境变量 `AION_DB_PASSWORD` 即可，其余配置不用动。
+
+SQL Server 跑在 Docker 里（例如 WSL2 中的 `mcr.microsoft.com/mssql/server:2022-latest`，`-p 1433:1433`）也一样能用：`db.server` 填 `127.0.0.1`，密码填容器的 sa 密码，就是普通的 TCP 连接。
 
 ### 数据库 AionShop
 
-启动时会自动创建 `AionShop` 库和全部表（重复执行没有副作用），并在库为空时导入 `data/shop.json` 作为初始商品目录。
+启动时会自动创建 `AionShop` 库和全部表（重复执行没有副作用），并在库为空时导入 `data/shop.json` 作为初始商品目录。因此 `db.user` 需要有建库权限（`dbcreator`）；不想给的话，可以先手动建好 `AionShop` 库并授权，程序只会建表。
 
 `db/` 目录里有：
 - `AionShop_schema.sql`：建表语句，和程序启动时执行的完全相同，用来阅读表结构；
 - `AionShop.bak`：一份**脱敏后**的示例备份（SQL Server 2022）。账号名已清空，账号和角色编号重新编排，角色名改为「角色N」，操作记录已清空。还原它可以看到带订单和流水的样例数据：
 
 ```sql
-RESTORE DATABASE AionShop FROM DISK = '/var/opt/mssql/backup/AionShop.bak'
-  WITH MOVE 'AionShop' TO '/var/opt/mssql/data/AionShop.mdf',
-       MOVE 'AionShop_log' TO '/var/opt/mssql/data/AionShop_log.ldf';
+RESTORE DATABASE AionShop FROM DISK = N'C:\AionWeb\db\AionShop.bak'
+  WITH MOVE 'AionShop' TO N'C:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\DATA\AionShop.mdf',
+       MOVE 'AionShop_log' TO N'C:\Program Files\Microsoft SQL Server\MSSQL16.MSSQLSERVER\MSSQL\DATA\AionShop_log.ldf';
 ```
+
+`.mdf` / `.ldf` 的路径按自己的实例改：默认实例一般是 `...\MSSQL16.MSSQLSERVER\MSSQL\DATA`（SQL Server 2022；2019 是 `MSSQL15`），命名实例的目录名是 `MSSQL16.<实例名>`。
 
 ### 服务端配置
 
@@ -173,13 +163,14 @@ py tools/build_items_cache.py --items <服务端>/Map/XML/L10N/items.xml --zh <�
 | `server/shopserver.ts` | 商城目录服务（主服务器 ShopClient 的对端） |
 | `server/shopagent.ts` | 点券服务（主服务器 ShopAgentClient 的对端）：余额、购买、交付、补发 |
 | `server/shopdb.ts` | `AionShop` 建表、点券、订单、目录、操作记录的数据访问 |
-| `server/db.ts` | SQL Server 连接池（按库名，sa 密码来自容器环境变量） |
+| `server/db.ts` | SQL Server 连接池（按库名；纯 JS 驱动，直连 TCP，密码来自 `config.json` 或环境变量） |
 | `server/items.ts` | 物品库：名称、品质、最大堆叠、魔石孔、强化上限 |
 | `server/config.ts` | 配置加载（相对路径按项目目录解析） |
 | `server/i18n.ts` | 服务端双语消息：按请求头 `X-Lang` 返回中文或英文 |
 | `public/` | 前端页面；界面基于 Majestic Admin 模板 |
 | `public/js/i18n.js` | 英文词典，以中文原文为键 |
 | `tools/build_items_cache.py` | 生成物品缓存 `data/items_cache.json`（不在仓库里，见「物品缓存」） |
+| `tools/check_db.ts` | `npm run db:check`：不启动后台，单独检查 SQL Server 连接 |
 | `data/shop.json` | 初始商品目录（数据库为空时导入） |
 | `db/` | 建表 SQL 和脱敏示例备份 |
 
@@ -239,5 +230,6 @@ py tools/build_items_cache.py --items <服务端>/Map/XML/L10N/items.xml --zh <�
 
 ## 致谢
 
+- RaGEZONE 用户 **Mr. House** 贡献了直连 SQL Server（不再依赖 Docker / WSL）和 `npm run db:check` 连接检查。
 - 界面模板：[Majestic Admin](https://github.com/BootstrapDash/MajesticAdmin-Free-Bootstrap-Admin-Template)（MIT）。
 - NCsoft 原版 ShopAgent 的发货仓库表设计（买家和收件人分开记、外部请求号防重复）给了不少参考。

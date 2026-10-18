@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT, loadConfig, loadSecrets, saveSecrets } from './config.ts';
 import { COOKIE, hashPassword, verifyPassword, issueToken, verifyToken, parseCookies, sessionCookie, clearCookie } from './auth.ts';
+import { dbTarget, pool as gamePool } from './db.ts';
 import { announce } from './cached.ts';
 import { serviceStatus, summary, listCharacters, getCharacter, sendMail, validateMailItems, listAccounts, findCashMail } from './game.ts';
 import { loadItems, tryLoadItems, itemsCacheExists, searchItems } from './items.ts';
@@ -385,8 +386,14 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(cfg.listenPort, cfg.listenHost, () => {
   console.log(`Aion 管理后台已启动: http://${cfg.listenHost}:${cfg.listenPort}/`);
-  console.log(`CacheD 管理端口: ${cfg.cached.host}:${cfg.cached.port}   数据库: ${cfg.db.server}:${cfg.db.port}/${cfg.db.database}`);
+  console.log(`CacheD 管理端口: ${cfg.cached.host}:${cfg.cached.port}   数据库: ${dbTarget(cfg)}`);
+  if ('dockerContainer' in (cfg.db as Record<string, unknown>)) {
+    console.log('config.json 里的 db.dockerContainer 已不再使用（不需要 Docker），可以删掉。');
+  }
   if (!secrets.passwordHash) console.log('首次使用：打开网页后先设置管理密码。');
+  gamePool(cfg)
+    .then(() => console.log(`数据库连接正常: ${dbTarget(cfg)}`))
+    .catch((e: Error) => console.log(`数据库连接失败: ${e.message}`));
   if (cfg.proxy.autoStart) {
     proxy.start()
       .then(() => console.log(`GM 命令代理已启动: ${cfg.proxy.listenHost}:${cfg.proxy.listenPort} -> ${cfg.proxy.targetHost}:${cfg.proxy.targetPort}`))

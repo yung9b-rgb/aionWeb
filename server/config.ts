@@ -10,11 +10,26 @@ const SECRETS_PATH = path.join(ROOT, 'data', 'secrets.json');
 
 export type ServiceDef = { name: string; process?: string; port?: number };
 
+// Direct SQL Server connection (no Docker/WSL/ODBC). A dedicated SQL login works too, it does not have to be sa.
+export type DbConfig = {
+  server: string;                  // 127.0.0.1, 127.0.0.1\SQLEXPRESS or 127.0.0.1,1433
+  port: number;                    // 0 = automatic (1433, or SQL Browser for a named instance)
+  instanceName: string;            // optional, e.g. SQLEXPRESS
+  database: string;                // game database
+  user: string;
+  password: string;                // optional; leave empty and use an environment variable instead
+  passwordEnv: string;             // read when password is empty
+  encrypt: boolean;
+  trustServerCertificate: boolean;
+  connectionTimeout: number;       // ms
+  requestTimeout: number;          // ms
+};
+
 export type Config = {
   listenHost: string;
   listenPort: number;
   cached: { host: string; port: number };
-  db: { server: string; port: number; database: string; user: string; dockerContainer: string };
+  db: DbConfig;
   itemsCache: string;
   services: ServiceDef[];
   proxy: { listenHost: string; listenPort: number; targetHost: string; targetPort: number; autoStart: boolean; logPackets: boolean };
@@ -26,7 +41,19 @@ const DEFAULTS: Config = {
   listenHost: '127.0.0.1',
   listenPort: 8088,
   cached: { host: '127.0.0.1', port: 2007 },
-  db: { server: '127.0.0.1', port: 1433, database: 'AionGame', user: 'sa', dockerContainer: 'mssql' },
+  db: {
+    server: '127.0.0.1',
+    port: 0,
+    instanceName: '',
+    database: 'AionGame',
+    user: 'sa',
+    password: '',
+    passwordEnv: 'AION_DB_PASSWORD',
+    encrypt: false,
+    trustServerCertificate: true,
+    connectionTimeout: 15000,
+    requestTimeout: 30000,
+  },
   // relative paths are resolved against the AionWeb folder (ROOT); a copy of Tools/gm-mail/items_cache.json
   itemsCache: 'data/items_cache.json',
   services: [

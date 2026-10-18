@@ -7,10 +7,16 @@
   },
   "db": {
     "server": "127.0.0.1",
-    "port": 1433,
+    "port": 0,
+    "instanceName": "",
     "database": "AionGame",
     "user": "sa",
-    "dockerContainer": "mssql"
+    "password": "",
+    "passwordEnv": "AION_DB_PASSWORD",
+    "encrypt": false,
+    "trustServerCertificate": true,
+    "connectionTimeout": 15000,
+    "requestTimeout": 30000
   },
   "itemsCache": "data/items_cache.json",
   "services": [
