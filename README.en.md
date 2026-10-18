@@ -66,10 +66,40 @@ game client ──► (GM command proxy 7779) ──► main server Server64 ─
 ## Requirements
 
 - Windows (the server itself is Windows software), Node.js **22.18 or newer** (24 LTS recommended; it runs TypeScript directly, no build step).
-- SQL Server (tested with 2022) running in a docker container in WSL. The sa password is read at runtime from the container's environment (`MSSQL_SA_PASSWORD` / `SA_PASSWORD`) and **never written to any file**.
+- SQL Server 2022, preferably in Docker inside WSL2 (image `mcr.microsoft.com/mssql/server:2022-latest`, see "Preparing SQL Server" below). The sa password is read at runtime from the container's environment (`MSSQL_SA_PASSWORD` / `SA_PASSWORD`) and **never written to any file**.
 - The Aion 2.7 server (Server64, CacheD64 …), not part of this repository.
 
 ## Setup
+
+### Preparing SQL Server (WSL + Docker recommended)
+
+Running Microsoft's official SQL Server 2022 image `mcr.microsoft.com/mssql/server:2022-latest` with Docker inside WSL2 (e.g. Ubuntu) is the recommended setup, and the one this project is developed on. The admin reads the sa password with `wsl -e docker inspect <container>`, so `wsl docker ps` run from a Windows prompt must list the container (Docker Engine installed in WSL, or Docker Desktop with WSL integration enabled, both work).
+
+In WSL:
+
+```bash
+mkdir -p ~/mssql/data ~/mssql/backup
+sudo chown -R 10001:0 ~/mssql          # SQL Server in the image runs as uid 10001 and must be able to write the mounts
+
+docker run -d --name mssql --restart unless-stopped \
+  -e ACCEPT_EULA=Y -e MSSQL_PID=Developer \
+  -e MSSQL_SA_PASSWORD='<your strong password>' \
+  -e MSSQL_COLLATION=Chinese_PRC_CI_AS \
+  -p 1433:1433 \
+  -v ~/mssql/data:/var/opt/mssql/data \
+  -v ~/mssql/backup:/var/opt/mssql/backup \
+  mcr.microsoft.com/mssql/server:2022-latest
+```
+
+- **Version**: use 2022. A backup restores only to the same or a newer SQL Server, so game database backups in 2022 format cannot be restored on older versions.
+- **sa password**: at least 8 characters with three of uppercase, lowercase, digits and symbols, or the container exits right after starting (`docker logs mssql` shows why). The password lives only in the container's environment; neither the admin nor this repository stores it.
+- **Collation**: the game databases use `Chinese_PRC_CI_AS`. Giving the server the same collation avoids collation conflicts with temp tables in stored procedures. It only applies when the data folder is first created; the `AionShop` database sets its own collation when it is created.
+- The **Developer edition** is free and licensed for development and testing only.
+- WSL2 forwards the port to Windows; the server's ODBC connections and the admin both use `127.0.0.1,1433`.
+- Put the container name in `db.dockerContainer` in `config.json` (default: `mssql`).
+- `.bak` files to restore go in `~/mssql/backup`, which is `/var/opt/mssql/backup` inside the container.
+
+### Starting the admin
 
 ```bash
 npm install

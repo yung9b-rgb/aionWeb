@@ -66,10 +66,40 @@
 ## 运行环境
 
 - Windows（服务端本身就是 Windows 程序），Node.js **22.18 以上**（推荐 24 LTS，直接运行 TypeScript，不用编译）。
-- SQL Server（实测 2022），运行在 WSL 的 docker 容器里。sa 密码在运行时从容器的环境变量（`MSSQL_SA_PASSWORD` / `SA_PASSWORD`）读取，**不写进任何文件**。
+- SQL Server 2022，推荐用 WSL2 里的 Docker 运行（镜像 `mcr.microsoft.com/mssql/server:2022-latest`，见下文「准备 SQL Server」）。sa 密码在运行时从容器的环境变量（`MSSQL_SA_PASSWORD` / `SA_PASSWORD`）读取，**不写进任何文件**。
 - 永恒之塔 2.7 服务端（Server64、CacheD64 等），不在本仓库内。
 
 ## 安装
+
+### 准备 SQL Server（推荐 WSL + Docker）
+
+推荐在 WSL2（如 Ubuntu）里用 Docker 跑微软官方的 SQL Server 2022 镜像 `mcr.microsoft.com/mssql/server:2022-latest`，作者就是这样跑的。后台通过 `wsl -e docker inspect <容器名>` 读取 sa 密码，所以要保证在 Windows 命令行里执行 `wsl docker ps` 能看到这个容器（WSL 里装 Docker Engine，或者 Docker Desktop 开启 WSL 集成都可以）。
+
+在 WSL 里执行：
+
+```bash
+mkdir -p ~/mssql/data ~/mssql/backup
+sudo chown -R 10001:0 ~/mssql          # 镜像里的 SQL Server 以 uid 10001 运行，挂载目录要给它写权限
+
+docker run -d --name mssql --restart unless-stopped \
+  -e ACCEPT_EULA=Y -e MSSQL_PID=Developer \
+  -e MSSQL_SA_PASSWORD='<你的强密码>' \
+  -e MSSQL_COLLATION=Chinese_PRC_CI_AS \
+  -p 1433:1433 \
+  -v ~/mssql/data:/var/opt/mssql/data \
+  -v ~/mssql/backup:/var/opt/mssql/backup \
+  mcr.microsoft.com/mssql/server:2022-latest
+```
+
+- **版本**：用 2022。数据库备份只能还原到同版本或更新的 SQL Server，游戏库备份是 2022 格式时，旧版本还原不了。
+- **sa 密码**：至少 8 位，并包含大写、小写、数字、符号中的三类，否则容器会启动后马上退出（`docker logs mssql` 可以看到原因）。密码只存在容器的环境变量里，后台和本仓库都不保存。
+- **排序规则**：游戏库是 `Chinese_PRC_CI_AS`。服务器排序规则设成一样，可以避免存储过程里临时表的排序规则冲突。这个设置只在第一次创建数据目录时生效，`AionShop` 库建库时会自己指定排序规则。
+- **Developer 版**免费，许可上只能用于开发和测试。
+- WSL2 会把端口转发到 Windows，服务端的 ODBC 和本后台都连 `127.0.0.1,1433`。
+- 容器名填到 `config.json` 的 `db.dockerContainer`（默认就是 `mssql`）。
+- 要还原的 `.bak` 放进 `~/mssql/backup`，在容器里就是 `/var/opt/mssql/backup`。
+
+### 启动后台
 
 ```bash
 npm install
