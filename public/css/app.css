@@ -21,8 +21,8 @@ body, .navbar, .sidebar, .card, .btn, .form-control {
 .table td, .table th { vertical-align: middle; }
 .aa-mono { font-family: Consolas, monospace; }
 .aa-item-results { max-height: 260px; overflow-y: auto; position: absolute; z-index: 1000; width: 100%; }
-.aa-quality-epic { color: #e0a100; font-weight: 600; }
-.aa-quality-unique { color: #d06b00; font-weight: 600; }
+.aa-quality-unique { color: #e0a100; font-weight: 600; }   /* 独特 (Fabled): gold */
+.aa-quality-epic { color: #d06b00; font-weight: 600; }     /* 史诗 (Eternal): orange */
 .aa-quality-legend { color: #2a7be4; font-weight: 600; }
 .aa-quality-rare { color: #19a974; }
 .aa-quality-mythic { color: #a42fd8; font-weight: 600; }
