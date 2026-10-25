@@ -744,6 +744,7 @@
           : `<div class="aa-tip-dim">${AA.t(n.ai ? '由其他 NPC 的 AI 召唤' : '没有刷新点（可能由任务、事件或脚本生成）')}</div>`)}
       </div>
       <ul class="nav nav-tabs aa-db-tabs mt-4 mb-3">
+        ${n.expect && n.expect.length ? `<li class="nav-item"><a class="nav-link" href="#" data-ntab="expect">${AA.t('期望获得')} <span class="badge bg-light text-dark">${n.expect.length}</span></a></li>` : ''}
         <li class="nav-item"><a class="nav-link" href="#" data-ntab="drops">${AA.t('掉落组')} <span class="badge bg-light text-dark">${n.drops.length + n.groups.filter((g) => g.adj > 0).length}</span></a></li>
         <li class="nav-item"><a class="nav-link" href="#" data-ntab="raw">${AA.t('原始数据')} <span class="badge bg-light text-dark">${n.f.length}</span></a></li>
       </ul>
@@ -752,11 +753,33 @@
     }
 
     // tabs under the NPC card; the chosen tab is kept while browsing NPCs
-    const nst = { n: null, tab: 'drops' };
+    // 期望获得 opens first on bosses; NPCs without it fall back to 掉落组
+    const nst = { n: null, tab: 'expect' };
     function renderNpcTab() {
       const n = nst.n; if (!n) return;
-      document.querySelectorAll('#db-detail [data-ntab]').forEach((a) => a.classList.toggle('active', a.dataset.ntab === nst.tab));
-      document.getElementById('nt-body').innerHTML = nst.tab === 'raw' ? npcRaw(n) : npcDrops(n);
+      const tab = nst.tab === 'expect' && !(n.expect && n.expect.length) ? 'drops' : nst.tab;
+      document.querySelectorAll('#db-detail [data-ntab]').forEach((a) => a.classList.toggle('active', a.dataset.ntab === tab));
+      document.getElementById('nt-body').innerHTML = tab === 'raw' ? npcRaw(n) : tab === 'expect' ? npcExpect(n) : npcDrops(n);
+    }
+
+    // 期望获得: the boss's own drops (its exclusive groups' items + equipment nobody else drops), chance per kill
+    function npcExpect(n) {
+      const sum = n.expect.reduce((s, it) => s + it.chance, 0) / 1e7;
+      const src = (it) => it.from.map((s) => (s ? `<span class="aa-mono${it.own ? '' : ' text-muted'}">${AA.esc(s)}</span>` : AA.t('直接掉落'))).join('<br>')
+        || `<span class="text-muted">${AA.t('当前不掉落')}</span>`;
+      const kills = (c) => (c > 0 ? AA.t('约 {0} 只', AA.fmtNum(Math.max(1, Math.round(1e7 / c)))) : '-');
+      return `<p class="mb-2">${AA.t('每击杀一次，平均获得 {0} 件下列物品。', sum.toFixed(2))}</p>
+        <div class="table-responsive"><table class="table table-sm aa-db-table">
+          <thead><tr><th style="width:52px"></th><th>${AA.t('物品')}</th><th style="width:50px">${AA.t('等级')}</th><th>${AA.t('来源')}</th>
+            <th style="width:86px" title="${AA.t('掉落系数 100 时，击杀一次得到这件的概率（合并所有来源）')}">${AA.t('概率')}</th>
+            <th style="width:86px" title="${AA.t('平均要击杀多少次才能得到一件')}">${AA.t('平均击杀')}</th></tr></thead>
+          <tbody>${n.expect.map((it) => `<tr>
+            <td>${iconBox(it.q, it.ic)}</td>
+            <td data-no-i18n class="text-nowrap"><span class="aa-quality-${AA.esc(it.q)}">${AA.esc(it.id ? nameOf(it) : it.k)}</span><div class="text-muted small aa-mono">${it.id || AA.esc(it.k)}</div></td>
+            <td>${it.lv || ''}</td><td class="small" data-no-i18n>${src(it)}</td>
+            <td class="aa-mono">${it.chance > 0 ? pct(it.chance) : '-'}</td><td>${kills(it.chance)}</td></tr>`).join('')}</tbody>
+        </table></div>
+        <p class="text-muted small mb-0">${AA.t('只属于这个 BOSS 的掉落：它独占的掉落组里的全部物品，加上别的怪都不掉的装备。概率按掉落系数 100 计算，合并了直接掉落和所有引用的组；灰色的来源是和别的怪共用的组。')}</p>`;
     }
 
     function npcDrops(n) {

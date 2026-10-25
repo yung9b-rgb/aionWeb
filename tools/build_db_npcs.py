@@ -168,10 +168,11 @@ def main():
             users[g].add(who(n))
 
     def exclusive(n):
+        """(equipment only this NPC drops, drop groups with equipment only this NPC references) - names, lower case"""
         own = n['direct'] | {x for g in n['common'] for x in group_gear.get(g, ())}
-        if any(droppers[x] <= {who(n)} for x in own):
-            return True
-        return any(group_gear.get(g) and users[g] <= {who(n)} for g in n['common'])
+        items = sorted(x for x in own if droppers[x] <= {who(n)})
+        groups = sorted({g for g in n['common'] if group_gear.get(g) and users[g] <= {who(n)}})
+        return items, groups
 
     out, count = [], defaultdict(int)
     for n in npcs:
@@ -183,7 +184,8 @@ def main():
         elif n['unatt'] or n['npc_type'] == 'summon_pet' or n['tribe'].lower().startswith('field_object'):
             cat = ''
         elif n['named']:
-            cat = 'boss' if exclusive(n) else 'chief'
+            ex = exclusive(n)
+            cat = 'boss' if ex[0] or ex[1] else 'chief'
         else:
             cat = 'monster'
         here = where[n['k'].lower()]
@@ -193,6 +195,9 @@ def main():
         rec = dict(id=n['id'], k=n['k'], zh=n['zh'], en=n['en'], lv=n['lv'], g=n['g'], hp=n['hp'], c=cat,
                    race=n['race'], tribe=n['tribe'])
         if n['tzh'] or n['ten']: rec['t'] = [n['tzh'], n['ten']]
+        if cat in ('boss', 'instance') and n['named']:     # 期望获得 tab: what makes it a boss
+            ex = exclusive(n)
+            if ex[0] or ex[1]: rec['ex'] = dict(i=ex[0], g=ex[1])
         if not (n['zh'].strip() or n['en'].strip()): rec['h'] = 1       # no display name: triggers, invisible helpers
         sp = maps.get(n['k'].lower(), {})
         here = where[n['k'].lower()]

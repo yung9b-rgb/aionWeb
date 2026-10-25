@@ -237,6 +237,7 @@ export type DbNpc = {
   t?: [string, string];             // title (Chinese, English)
   maps?: string[];                  // world.xml folders it is spawned in, most spawns first
   ai?: 1;                           // spawned by another NPC's AI pattern
+  ex?: { i: string[]; g: string[] };  // named bosses: equipment / drop groups only this NPC has (lower-case names)
   h?: 1;                            // no display name (triggers, invisible helpers): left out of the lists
 };
 const NPCS_FILE = path.join(ROOT, 'data', 'db_npcs.json');
@@ -346,5 +347,42 @@ export function getNpc(id: number) {
       const total = g ? g.items.reduce((s, [, w]) => s + w, 0) : 0;
       return { id: g?.id ?? 0, name, adj, idx, items: g?.items.length ?? 0, chance: adj > 0 ? Math.min(total * adj / 100, 1e7) : 0 };
     }).sort((a: any, b: any) => b.chance - a.chance),          // most likely first; groups that never roll last
+    expect: n.ex && gc ? expectedDrops(n.ex, raw, gc, ic, item) : null,
   };
+}
+
+// 期望获得: every item of the boss's own drop groups plus its other exclusive equipment, each with the chance per kill
+// (drop rate 100) of getting it from any of this NPC's sources: direct items (min(prob, 70%)) and every group it
+// rolls, where a group's roll walks the items in file order and a cumulative total over 100% cuts the rest off.
+function expectedDrops(ex: { i: string[]; g: string[] }, raw: any, gc: NonNullable<typeof groupCache>,
+  ic: NonNullable<typeof cache>, item: (k: string) => any) {
+  const keyOf = (iid: number | string) => (typeof iid === 'number' ? ic.byId.get(iid)?.k.toLowerCase() ?? String(iid) : iid.toLowerCase());
+  const miss = new Map<string, number>();          // item -> chance of NOT getting it on one kill
+  const from = new Map<string, string[]>();        // item -> sources (group names, 直接掉落)
+  const add = (k: string, p: number, src: string) => {
+    if (p <= 0) return;
+    miss.set(k, (miss.get(k) ?? 1) * (1 - p));
+    from.set(k, [...(from.get(k) ?? []), src]);
+  };
+  for (const [k, , prob] of raw?.d ?? []) add(String(k).toLowerCase(), Math.min(prob, 7e6) / 1e7, '');
+  for (const [name, adj] of raw?.cd ?? []) {
+    const g = adj > 0 ? groupsByName?.map.get(String(name).toLowerCase()) : undefined;
+    if (!g) continue;
+    let cum = 0;
+    for (const [iid, w] of g.items) {
+      const lo = cum;
+      cum = Math.min(cum + w * adj / 100, 1e7);
+      add(keyOf(iid), (cum - lo) / 1e7, g.name);
+      if (cum >= 1e7) break;
+    }
+  }
+  const own = new Set(ex.g);
+  const wanted = new Set(ex.i);
+  for (const name of ex.g) for (const [iid] of groupsByName?.map.get(name)?.items ?? []) wanted.add(keyOf(iid));
+  return [...wanted].map((k) => ({
+    ...item(k), chance: (1 - (miss.get(k) ?? 1)) * 1e7,
+    // sources: the boss's own groups first, '' = a direct item
+    from: [...new Set(from.get(k) ?? [])].sort((a, b) => Number(own.has(b.toLowerCase())) - Number(own.has(a.toLowerCase()))),
+    own: [...new Set(from.get(k) ?? [])].some((s) => own.has(s.toLowerCase())),
+  })).sort((a, b) => b.chance - a.chance || a.id - b.id);
 }
