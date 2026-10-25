@@ -416,7 +416,7 @@
               <div class="aa-side-title">${AA.t('游戏视窗用超连结')}</div>
               <div class="input-group input-group-sm">
                 <input type="text" class="form-control aa-mono" id="it-link" value="${AA.esc(link)}" readonly>
-                <button type="button" class="btn btn-primary" id="it-copy">${AA.t('复制')}</button>
+                <button type="button" class="btn btn-primary" data-copy="${AA.esc(link)}">${AA.t('复制')}</button>
               </div>
             </div>
           </div>
@@ -592,6 +592,17 @@
     });
     window.addEventListener('scroll', hideTip, true);
 
+    // copy buttons (item chat link, GM commands): data-copy holds the text
+    document.addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-copy]'); if (!btn) return;
+      const text = btn.dataset.copy;
+      try { await navigator.clipboard.writeText(text); } catch {
+        const input = btn.parentElement.querySelector('input');
+        if (input) { input.select(); document.execCommand('copy'); }
+      }
+      AA.toast(AA.t('已复制：{0}', text));
+    });
+
     function itemRaw(it) {
       return `<div class="table-responsive"><table class="table table-sm aa-db-table aa-db-raw"><tbody>
         ${Object.entries(it.f).map(([k, v]) => `<tr><td class="aa-mono text-muted">${AA.esc(k)}</td><td class="aa-mono" data-no-i18n>${AA.esc(v)}</td></tr>`).join('')}
@@ -616,11 +627,6 @@
         document.getElementById('g-q').value = row.dataset.gopen;
         location.hash = '#item/dropgroup';
         return;
-      }
-      if (e.target.closest('#it-copy')) {
-        const input = document.getElementById('it-link');
-        try { await navigator.clipboard.writeText(input.value); } catch { input.select(); document.execCommand('copy'); }
-        AA.toast(AA.t('已复制：{0}', input.value));
       }
     });
 
@@ -759,7 +765,7 @@
       nst.n = n;
       const title = npcTitle(n);
       const maps = [...new Set((n.maps || []).map((w) => (AA.lang === 'en' ? n.mapNames[w][1] : n.mapNames[w][0]) || w))];
-      box.innerHTML = `<div class="aa-tip aa-tip-npc">
+      box.innerHTML = `<div class="aa-item-top"><div class="aa-tip aa-tip-npc">
         <div class="aa-tip-name">
           <div class="aa-tip-title-name ${npcCls(n)}" data-no-i18n>${AA.esc(npcName(n))}</div>
           ${title ? `<div class="aa-tip-dim" data-no-i18n>&lt;${AA.esc(title)}&gt;</div>` : ''}
@@ -775,6 +781,8 @@
         ${sec('出现地图', maps.length ? `<div data-no-i18n>${maps.map(AA.esc).join('、')}</div>`
           : `<div class="aa-tip-dim">${AA.t(n.ai ? '由其他 NPC 的 AI 召唤' : '没有刷新点（可能由任务、事件或脚本生成）')}</div>`)}
       </div>
+      ${npcGm(n)}
+      </div>
       <ul class="nav nav-tabs aa-db-tabs mt-4 mb-3">
         ${n.expect && n.expect.length ? `<li class="nav-item"><a class="nav-link" href="#" data-ntab="expect">${AA.t('期望获得')} <span class="badge bg-light text-dark">${n.expect.length}</span></a></li>` : ''}
         <li class="nav-item"><a class="nav-link" href="#" data-ntab="drops">${AA.t('掉落组')} <span class="badge bg-light text-dark">${n.drops.length + n.groups.filter((g) => g.adj > 0).length}</span></a></li>
@@ -783,6 +791,26 @@
       <div id="nt-body"></div>`;
       renderNpcTab();
     }
+
+    // GM commands for the NPC (type them in game chat with the GM proxy running):
+    //   //teleport_to_named <id>  Server64 HandleBuilderOperation: finds a live NPC with that name id and moves you to it
+    //   //wishid <count> <id>     spawns <count> of it next to you;  //wish <internal name> does the same by name
+    const copyRow = (cmd) => `<div class="input-group input-group-sm mb-2">
+        <input type="text" class="form-control aa-mono" value="${AA.esc(cmd)}" readonly>
+        <button type="button" class="btn btn-primary" data-copy="${AA.esc(cmd)}">${AA.t('复制')}</button></div>`;
+    const npcGm = (n) => `<div class="aa-item-side">
+        <div class="aa-side-box">
+          <div class="aa-side-title">${AA.t('前往这个 NPC')}</div>
+          ${copyRow(`//teleport_to_named ${n.id}`)}
+          <div class="text-muted small">${AA.t('它要已经刷出来并且活着；有多只时去其中一只。')}</div>
+        </div>
+        <div class="aa-side-box">
+          <div class="aa-side-title">${AA.t('刷出这个 NPC')}</div>
+          ${copyRow(`//wishid 1 ${n.id}`)}
+          ${copyRow(`//wish ${n.k}`)}
+          <div class="text-muted small">${AA.t('在你身边刷出；wishid 的第一个数字是数量。')}</div>
+        </div>
+      </div>`;
 
     // tabs under the NPC card; the chosen tab is kept while browsing NPCs
     // 期望获得 opens first on bosses; NPCs without it fall back to 掉落组
