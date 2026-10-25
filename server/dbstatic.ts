@@ -35,6 +35,7 @@ function load() {
 export type ItemQuery = {
   cat: string; lvMin?: number; lvMax?: number; races: number[]; qualities: string[]; stats: string[];
   search: string; hidden: boolean; page: number; size: number;
+  sort?: 'id' | 'lv'; desc?: boolean;          // default id ascending; level sorts fall back to id
 };
 
 const inCat = (it: DbItem, cat: string) => !cat || it.c.some((c) => c === cat || c.startsWith(cat + '/'));
@@ -52,11 +53,14 @@ export function queryItems(q: ItemQuery) {
     && (!q.qualities.length || q.qualities.includes(it.q))
     && q.stats.every((k) => it.st && k in it.st)
     && (!s || String(it.id).startsWith(s) || it.zh.toLowerCase().includes(s) || it.en.toLowerCase().includes(s) || it.k.toLowerCase().includes(s)));
+  const dir = q.desc ? -1 : 1;
+  if (q.sort === 'lv') rows.sort((a, b) => (a.lv - b.lv) * dir || a.id - b.id);
+  else if (q.desc) rows.sort((a, b) => b.id - a.id);   // the file is already in id order
   const size = Math.min(Math.max(q.size, 1), 100);
   const pages = Math.max(1, Math.ceil(rows.length / size));
   const page = Math.min(Math.max(q.page, 1), pages);
   return {
-    total: rows.length, page, pages, size,
+    total: rows.length, page, pages, size, sort: q.sort === 'lv' ? 'lv' : 'id', desc: !!q.desc,
     rows: rows.slice((page - 1) * size, page * size).map(({ id, k, zh, en, lv, q: quality, race, ic }) => ({ id, k, zh, en, lv, q: quality, race, ic })),
     stats: [...statCount].sort((a, b) => b[1] - a[1]).map(([key, n]) => ({ key, label: labels[key] ?? key, n })),
   };

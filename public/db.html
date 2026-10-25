@@ -167,12 +167,28 @@
 
     // Item list: filters -> /api/db/items (server-side filter + paging). 附加属性 tags come from the category's items.
     const QUALITIES = [['common', '普通'], ['rare', '稀有'], ['legend', '传颂'], ['unique', '唯一'], ['epic', '英雄']];
-    const state = { cat: '', page: 1, races: new Set(), qualities: new Set(), stats: new Set(), statList: [], seq: 0, selected: 0 };
+    const state = { cat: '', page: 1, races: new Set(), qualities: new Set(), stats: new Set(), statList: [], seq: 0, selected: 0,
+      sort: 'id', desc: false };
 
     document.getElementById('f-quality').innerHTML = `<label>${AA.t('品质')}</label>` + QUALITIES.map(([k, t]) =>
       `<label class="aa-db-q aa-quality-${k}"><input type="checkbox" value="${k}"> ${AA.t(t)}</label>`).join('');
-    document.getElementById('t-head').innerHTML = `<tr><th style="width:100px">ID</th><th style="width:52px"></th>
-      <th>${AA.t('物品名称')}</th><th style="width:64px">${AA.t('等级')}</th></tr>`;
+    // ID and 等级 sort server-side; clicking the active column again reverses it
+    function renderHead() {
+      const th = (key, label, width) => {
+        const on = state.sort === key;
+        const icon = on ? (state.desc ? 'mdi-arrow-down' : 'mdi-arrow-up') : 'mdi-swap-vertical';
+        return `<th style="width:${width}px" class="aa-db-sort${on ? ' on' : ''}" data-sort="${key}">${label} <i class="mdi ${icon}"></i></th>`;
+      };
+      document.getElementById('t-head').innerHTML = `<tr>${th('id', 'ID', 110)}<th style="width:52px"></th>
+        <th>${AA.t('物品名称')}</th>${th('lv', AA.t('等级'), 80)}</tr>`;
+    }
+    renderHead();
+    document.getElementById('t-head').addEventListener('click', (e) => {
+      const th = e.target.closest('[data-sort]'); if (!th) return;
+      if (state.sort === th.dataset.sort) state.desc = !state.desc;
+      else { state.sort = th.dataset.sort; state.desc = false; }
+      renderHead(); reload();
+    });
 
     const nameOf = (r) => (AA.lang === 'en' ? (r.en || r.k) : (r.zh || r.k));
     const val = (id) => document.getElementById(id).value.trim();
@@ -196,7 +212,7 @@
     }
 
     async function load() {
-      const q = new URLSearchParams({ cat: state.cat, page: state.page, size: val('f-size') });
+      const q = new URLSearchParams({ cat: state.cat, page: state.page, size: val('f-size'), sort: state.sort, dir: state.desc ? 'desc' : 'asc' });
       if (val('f-lv-min')) q.set('lvMin', val('f-lv-min'));
       if (val('f-lv-max')) q.set('lvMax', val('f-lv-max'));
       if (state.races.size) q.set('race', [...state.races].join(','));

@@ -102,3 +102,6 @@ select.form-control, .dataTables_wrapper select { color: #212529 !important; }
 .aa-db-icon-epic { border-color: #d06b00; }
 .aa-db-icon-mythic { border-color: #a42fd8; }
 .aa-quality-junk { color: #a3a9b6; }
+.aa-db-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+.aa-db-sort .mdi { color: #b5bac6; }
+.aa-db-sort:hover .mdi, .aa-db-sort.on .mdi { color: #4d83ff; }
