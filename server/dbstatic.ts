@@ -224,3 +224,67 @@ export function getGroup(id: number) {
     }),
   };
 }
+
+// ---- NPC: data/db_npcs.json, built by tools/build_db_npcs.py (npcs.xml + spawns + drops + client strings) ----
+export type DbNpc = {
+  id: number; k: string; zh: string; en: string; lv: number;
+  g: number;                        // hpgauge_level: 1-5 normal, 10-14 elite, 20-22 hero, 26-27 legend
+  hp: number;
+  c: '' | 'light' | 'dark' | 'monster' | 'chief' | 'boss';
+  race: string; tribe: string;
+  t?: [string, string];             // title (Chinese, English)
+  maps?: string[];                  // world.xml folders it is spawned in, most spawns first
+  ai?: 1;                           // spawned by another NPC's AI pattern
+  h?: 1;                            // no display name (triggers, invisible helpers): left out of the lists
+};
+const NPCS_FILE = path.join(ROOT, 'data', 'db_npcs.json');
+let npcCache: { mtime: number; npcs: DbNpc[]; byId: Map<number, DbNpc>; maps: Record<string, [string, string]> } | null = null;
+
+function loadNpcs() {
+  if (!fs.existsSync(NPCS_FILE)) {
+    throw new LError('没有 NPC 数据 data/db_npcs.json：先用 tools/build_db_npcs.py 生成（见 README）',
+      'No NPC data data/db_npcs.json: generate it with tools/build_db_npcs.py (see README)');
+  }
+  const mtime = fs.statSync(NPCS_FILE).mtimeMs;
+  if (!npcCache || npcCache.mtime !== mtime) {
+    const raw = JSON.parse(fs.readFileSync(NPCS_FILE, 'utf8'));
+    const npcs: DbNpc[] = raw.npcs ?? [];
+    npcCache = { mtime, npcs, byId: new Map(npcs.map((n) => [n.id, n])), maps: raw.maps ?? {} };
+  }
+  return npcCache;
+}
+
+export const npcGrade = (g: number) => (g >= 26 ? 'legend' : g >= 20 ? 'hero' : g >= 10 ? 'elite' : g >= 1 ? 'normal' : '');
+
+export type NpcQuery = {
+  cat: string; lvMin?: number; lvMax?: number; grades: string[]; search: string; page: number; size: number;
+  sort?: 'id' | 'lv'; desc?: boolean;
+};
+
+export function queryNpcs(q: NpcQuery) {
+  const { npcs, maps } = loadNpcs();
+  const s = q.search.trim().toLowerCase();
+  const rows = npcs.filter((n) => !n.h && (!q.cat || n.c === q.cat)
+    && (q.lvMin === undefined || n.lv >= q.lvMin) && (q.lvMax === undefined || n.lv <= q.lvMax)
+    && (!q.grades.length || q.grades.includes(npcGrade(n.g)))
+    && (!s || String(n.id).startsWith(s) || n.zh.toLowerCase().includes(s) || n.en.toLowerCase().includes(s)
+      || n.k.toLowerCase().includes(s) || (n.t ? n.t.some((x) => x.toLowerCase().includes(s)) : false)));
+  const dir = q.desc ? -1 : 1;
+  if (q.sort === 'lv') rows.sort((a, b) => (a.lv - b.lv) * dir || a.id - b.id);
+  else if (q.desc) rows.sort((a, b) => b.id - a.id);
+  const size = Math.min(Math.max(q.size, 1), 100);
+  const pages = Math.max(1, Math.ceil(rows.length / size));
+  const page = Math.min(Math.max(q.page, 1), pages);
+  return {
+    total: rows.length, page, pages, size, sort: q.sort === 'lv' ? 'lv' : 'id', desc: !!q.desc,
+    rows: rows.slice((page - 1) * size, page * size).map((n) => ({ id: n.id, k: n.k, zh: n.zh, en: n.en, lv: n.lv,
+      grade: npcGrade(n.g), g: n.g, c: n.c, t: n.t, ai: n.ai,
+      maps: n.maps?.slice(0, 3).map((w) => ({ w, zh: maps[w]?.[0] || w, en: maps[w]?.[1] || w })), more: Math.max(0, (n.maps?.length ?? 0) - 3) })),
+  };
+}
+
+export function getNpc(id: number) {
+  const { byId, maps } = loadNpcs();
+  const n = byId.get(id);
+  return n ? { ...n, grade: npcGrade(n.g), mapNames: Object.fromEntries((n.maps ?? []).map((w) => [w, maps[w] ?? [w, w]])) } : null;
+}

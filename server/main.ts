@@ -8,7 +8,7 @@ import { dbTarget, pool as gamePool } from './db.ts';
 import { announce } from './cached.ts';
 import { serviceStatus, summary, listCharacters, getCharacter, sendMail, validateMailItems, listAccounts, findCashMail } from './game.ts';
 import { loadItems, tryLoadItems, itemsCacheExists, searchItems } from './items.ts';
-import { queryItems, getItem, queryGroups, getGroup } from './dbstatic.ts';
+import { queryItems, getItem, queryGroups, getGroup, queryNpcs, getNpc } from './dbstatic.ts';
 import { GmProxy } from './gmproxy.ts';
 import { ShopServer } from './shopserver.ts';
 import { ShopAgentServer } from './shopagent.ts';
@@ -203,6 +203,18 @@ route('GET', '/api/db/dropgroups/(\\d+)', async (_req, _url, m) => {
   const g = getGroup(Number(m[1]));
   if (!g) throw new HttpError(404, L('掉落组不存在', 'Drop group not found'));
   return g;
+});
+
+route('GET', '/api/db/npcs', async (_req, url) => {
+  const p = url.searchParams, list = (k: string) => (p.get(k) ?? '').split(',').filter(Boolean);
+  return queryNpcs({ cat: p.get('cat') ?? '', lvMin: num(p.get('lvMin')), lvMax: num(p.get('lvMax')), grades: list('grade'),
+    search: p.get('search') ?? '', page: num(p.get('page')) ?? 1, size: num(p.get('size')) ?? 10,
+    sort: p.get('sort') === 'lv' ? 'lv' : 'id', desc: p.get('dir') === 'desc' });
+});
+route('GET', '/api/db/npcs/(\\d+)', async (_req, _url, m) => {
+  const n = getNpc(Number(m[1]));
+  if (!n) throw new HttpError(404, L('NPC 不存在', 'NPC not found'));
+  return n;
 });
 
 route('POST', '/api/mail/preview', async (req) => {

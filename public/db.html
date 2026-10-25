@@ -60,6 +60,41 @@
                       </table>
                     </div>
                   </div>
+                  <div id="db-npcs" class="d-none">
+                    <div class="aa-db-filter">
+                      <div class="aa-db-frow">
+                        <label>等级</label>
+                        <input type="number" class="form-control form-control-sm" id="n-lv-min" min="1" max="99">
+                        <span>~</span>
+                        <input type="number" class="form-control form-control-sm" id="n-lv-max" min="1" max="99">
+                      </div>
+                      <div class="aa-db-frow" id="n-grade"></div>
+                    </div>
+                    <div class="aa-db-bar">
+                      <div class="d-flex align-items-center gap-2">
+                        <span>显示</span>
+                        <select class="form-control form-control-sm" id="n-size" style="width:auto">
+                          <option selected>10</option><option>25</option><option>50</option><option>100</option>
+                        </select>
+                        <span>项结果</span>
+                        <button class="btn btn-sm btn-outline-secondary ms-2" id="n-reset"><i class="mdi mdi-restore"></i> 重置筛选</button>
+                      </div>
+                      <div class="d-flex align-items-center gap-2">
+                        <span>搜索：</span>
+                        <input type="text" class="form-control form-control-sm" id="n-q" placeholder="名称、称号或 ID" style="width:180px">
+                      </div>
+                    </div>
+                    <div class="aa-db-bar">
+                      <span class="text-muted" id="n-summary"></span>
+                      <nav><ul class="pagination pagination-sm mb-0" id="n-pager"></ul></nav>
+                    </div>
+                    <div class="table-responsive">
+                      <table class="table table-hover aa-db-table">
+                        <thead id="n-head"></thead>
+                        <tbody id="n-body"></tbody>
+                      </table>
+                    </div>
+                  </div>
                   <div id="db-items">
                     <div class="aa-db-filter">
                       <div class="aa-db-frow">
@@ -155,7 +190,7 @@
       ]],
       ['skill', '技能', null],
       ['quest', '任务', null],
-      ['npc', 'NPC', null],
+      ['npc', 'NPC', [['light', '天族'], ['dark', '魔族'], ['monster', '怪物'], ['chief', '头目'], ['boss', '命名BOSS']]],
     ];
     const ICONS = { item: 'mdi-sword-cross', skill: 'mdi-flash', quest: 'mdi-book-open-variant', npc: 'mdi-account-group' };
 
@@ -359,7 +394,7 @@
         if (seq === ist.seq) box.innerHTML = `<div class="text-danger">${AA.esc(e.message)}</div>`;
         return;
       }
-      if (seq !== ist.seq || state.selected !== id || gstate.active) return;
+      if (seq !== ist.seq || state.selected !== id || pageKind !== 'item') return;
       ist.it = it; ist.gpage = 1;
       // the tooltip is the main view; beside it 附加信息 and the chat link, below it the 掉落组 / 原始数据 tabs
       const link = `[item: ${it.id}]`;
@@ -527,7 +562,7 @@
     }
 
     document.getElementById('db-detail').addEventListener('click', async (e) => {
-      if (gstate.active || !ist.it) return;
+      if (pageKind !== 'item' || !ist.it) return;
       const t = e.target.closest('[data-itab]');
       if (t) { e.preventDefault(); ist.tab = t.dataset.itab; renderItemTab(); return; }
       const pg = e.target.closest('#ig-pager [data-page]');
@@ -550,6 +585,126 @@
         AA.toast(AA.t('已复制：{0}', input.value));
       }
     });
+
+    // ---- NPC: /api/db/npcs (server-side filter + paging), detail from /api/db/npcs/:id ----
+    const GRADES = [['normal', '普通'], ['elite', '精英'], ['hero', '英雄'], ['legend', '传说']];
+    const NPC_CAT = { light: '天族', dark: '魔族', monster: '怪物', chief: '头目', boss: '命名BOSS' };
+    const nstate = { cat: '', page: 1, grades: new Set(), sort: 'id', desc: false, seq: 0, selected: 0 };
+    const gradeName = (g) => AA.t((GRADES.find(([k]) => k === g) || [, ''])[1]);
+    const npcName = (n) => (AA.lang === 'en' ? (n.en || n.zh || n.k) : (n.zh || n.en || n.k));
+    const npcTitle = (n) => (n.t ? (AA.lang === 'en' ? (n.t[1] || n.t[0]) : (n.t[0] || n.t[1])) : '');
+    const mapName = (m) => (AA.lang === 'en' ? m.en : m.zh);
+    const NPC_EMPTY = `<div class="aa-db-detail-empty"><i class="mdi mdi-information-outline"></i><div>${AA.t('点击左侧列表中的 NPC 查看详情')}</div></div>`;
+
+    document.getElementById('n-grade').innerHTML = `<label>${AA.t('级别')}</label>` + GRADES.map(([k, t]) =>
+      `<label class="aa-db-q aa-npc-grade-${k}"><input type="checkbox" value="${k}"> ${AA.t(t)}</label>`).join('');
+
+    function renderNpcHead() {
+      const th = (key, label, width) => {
+        const on = nstate.sort === key;
+        const icon = on ? (nstate.desc ? 'mdi-arrow-down' : 'mdi-arrow-up') : 'mdi-swap-vertical';
+        return `<th style="width:${width}px" class="aa-db-sort${on ? ' on' : ''}" data-sort="${key}">${label} <i class="mdi ${icon}"></i></th>`;
+      };
+      document.getElementById('n-head').innerHTML = `<tr>${th('id', 'ID', 100)}<th>${AA.t('名称')}</th>
+        ${th('lv', AA.t('等级'), 80)}<th style="width:70px">${AA.t('级别')}</th><th>${AA.t('出现地图')}</th></tr>`;
+    }
+    renderNpcHead();
+
+    async function loadNpcs() {
+      const q = new URLSearchParams({ cat: nstate.cat, page: nstate.page, size: val('n-size'), sort: nstate.sort, dir: nstate.desc ? 'desc' : 'asc' });
+      if (val('n-lv-min')) q.set('lvMin', val('n-lv-min'));
+      if (val('n-lv-max')) q.set('lvMax', val('n-lv-max'));
+      if (nstate.grades.size) q.set('grade', [...nstate.grades].join(','));
+      if (val('n-q')) q.set('search', val('n-q'));
+      const seq = ++nstate.seq, body = document.getElementById('n-body');
+      let d;
+      try { d = await AA.api('GET', '/api/db/npcs?' + q); } catch (e) {
+        if (seq === nstate.seq) body.innerHTML = `<tr><td colspan="5" class="text-danger text-center py-4">${AA.esc(e.message)}</td></tr>`;
+        return;
+      }
+      if (seq !== nstate.seq) return;
+      nstate.page = d.page;
+      body.innerHTML = d.rows.map((n) => {
+        const title = npcTitle(n);
+        const where = n.maps ? n.maps.map(mapName).map(AA.esc).join('、') + (n.more ? ` <span class="text-muted">+${n.more}</span>` : '')
+          : `<span class="text-muted">${AA.t(n.ai ? '由其他 NPC 召唤' : '无刷新点')}</span>`;
+        return `<tr data-nid="${n.id}" class="aa-db-row${n.id === nstate.selected ? ' table-active' : ''}">
+          <td class="aa-mono">${n.id}</td>
+          <td data-no-i18n><span class="aa-npc-${n.c || 'other'}">${AA.esc(npcName(n))}</span>
+            ${!nstate.cat && n.c ? `<span class="aa-npc-cat">${AA.t(NPC_CAT[n.c])}</span>` : ''}
+            ${title ? `<div class="text-muted small">&lt;${AA.esc(title)}&gt;</div>` : ''}</td>
+          <td>${n.lv}</td><td>${gradeName(n.grade)}</td><td class="small" data-no-i18n>${where}</td>
+        </tr>`;
+      }).join('') || `<tr><td colspan="5" class="text-muted text-center py-4">${AA.t('没有符合条件的 NPC')}</td></tr>`;
+      const from = d.total ? (d.page - 1) * d.size + 1 : 0, to = Math.min(d.total, d.page * d.size);
+      document.getElementById('n-summary').textContent = AA.t('第 {0} 至 {1} 项，共 {2} 项', from, to, AA.fmtNum(d.total));
+      renderPager(d.page, d.pages, 'n-pager');
+    }
+
+    let ntimer = 0;
+    const nreload = (delay = 0) => { nstate.page = 1; clearTimeout(ntimer); ntimer = setTimeout(loadNpcs, delay); };
+    function renderNpcs(cat) {
+      if (cat !== nstate.cat) { nstate.cat = cat; nstate.selected = 0; document.getElementById('db-detail').innerHTML = NPC_EMPTY; }
+      nreload();
+    }
+    document.getElementById('n-grade').addEventListener('change', (e) => { toggle(nstate.grades, e.target.value); nreload(); });
+    ['n-lv-min', 'n-lv-max', 'n-q'].forEach((id) => document.getElementById(id).addEventListener('input', () => nreload(350)));
+    document.getElementById('n-size').addEventListener('change', () => nreload());
+    document.getElementById('n-reset').addEventListener('click', () => {
+      ['n-lv-min', 'n-lv-max', 'n-q'].forEach((id) => { document.getElementById(id).value = ''; });
+      document.querySelectorAll('#n-grade input').forEach((x) => { x.checked = false; });
+      nstate.grades.clear(); nreload();
+    });
+    document.getElementById('n-head').addEventListener('click', (e) => {
+      const th = e.target.closest('[data-sort]'); if (!th) return;
+      if (nstate.sort === th.dataset.sort) nstate.desc = !nstate.desc;
+      else { nstate.sort = th.dataset.sort; nstate.desc = false; }
+      renderNpcHead(); nreload();
+    });
+    document.getElementById('n-pager').addEventListener('click', (e) => {
+      const a = e.target.closest('[data-page]'); if (!a) return;
+      e.preventDefault();
+      const n = +a.dataset.page;
+      if (!n || a.parentElement.classList.contains('disabled') || a.parentElement.classList.contains('active')) return;
+      nstate.page = n; loadNpcs();
+    });
+    document.getElementById('n-body').addEventListener('click', (e) => {
+      const tr = e.target.closest('tr[data-nid]'); if (!tr) return;
+      nstate.selected = +tr.dataset.nid;
+      document.querySelectorAll('#n-body tr.table-active').forEach((x) => x.classList.remove('table-active'));
+      tr.classList.add('table-active');
+      showNpc(nstate.selected);
+    });
+
+    // basic NPC card (same dark tooltip style as items); drops, skills and spawn points come later
+    let nseq = 0;
+    async function showNpc(id) {
+      const box = document.getElementById('db-detail'), seq = ++nseq;
+      let n;
+      try { n = await AA.api('GET', '/api/db/npcs/' + id); } catch (e) {
+        if (seq === nseq) box.innerHTML = `<div class="text-danger">${AA.esc(e.message)}</div>`;
+        return;
+      }
+      if (seq !== nseq || nstate.selected !== id || pageKind !== 'npc') return;
+      const title = npcTitle(n);
+      const maps = (n.maps || []).map((w) => (AA.lang === 'en' ? n.mapNames[w][1] : n.mapNames[w][0]) || w);
+      box.innerHTML = `<div class="aa-tip aa-tip-npc">
+        <div class="aa-tip-name">
+          <div class="aa-tip-title-name aa-npc-${n.c || 'other'}" data-no-i18n>${AA.esc(npcName(n))}</div>
+          ${title ? `<div class="aa-tip-dim" data-no-i18n>&lt;${AA.esc(title)}&gt;</div>` : ''}
+          <div class="aa-tip-dim aa-mono">${n.id} · ${AA.esc(n.k)}</div>
+        </div>
+        ${sec('', kv([
+          ['分类', AA.t(NPC_CAT[n.c] || '其他')],
+          ['等级', n.lv], ['级别', `${gradeName(n.grade)} <span class="aa-tip-dim">(${n.g})</span>`],
+          ['生命力', AA.fmtNum(n.hp)],
+          n.race && ['种族类型', `<span class="aa-mono">${AA.esc(n.race)}</span>`],
+          n.tribe && ['阵营', `<span class="aa-mono">${AA.esc(n.tribe)}</span>`],
+        ]))}
+        ${sec('出现地图', maps.length ? `<div data-no-i18n>${maps.map(AA.esc).join('、')}</div>`
+          : `<div class="aa-tip-dim">${AA.t(n.ai ? '由其他 NPC 的 AI 召唤' : '没有刷新点（可能由任务、事件或脚本生成）')}</div>`)}
+      </div>`;
+    }
 
     // ---- 掉落组 ----
     const gstate = { page: 1, sort: 'id', desc: false, seq: 0, selected: 0, active: false, open: 0 };
@@ -742,20 +897,26 @@
       // 掉落组 lives under 物品 in the menu but is its own page, not an item list
       const isGroups = path[0] && path[0][0] === 'item' && path[1] && path[1][0] === 'dropgroup';
       const isItem = path[0] && path[0][0] === 'item' && !isGroups;
+      const isNpc = path[0] && path[0][0] === 'npc';
       document.getElementById('db-items').classList.toggle('d-none', !isItem);
       document.getElementById('db-groups').classList.toggle('d-none', !isGroups);
-      document.getElementById('db-empty').classList.toggle('d-none', isItem || isGroups);
-      if (isGroups !== gstate.active) {           // entering / leaving 掉落组 resets the detail card
-        gstate.active = isGroups;
+      document.getElementById('db-npcs').classList.toggle('d-none', !isNpc);
+      document.getElementById('db-empty').classList.toggle('d-none', isItem || isGroups || isNpc);
+      const kind = isGroups ? 'groups' : isNpc ? 'npc' : isItem ? 'item' : 'other';
+      if (kind !== pageKind) {                   // switching page kinds resets the detail card
+        pageKind = kind; gstate.active = isGroups;
         document.getElementById('db-detail').innerHTML = isGroups
           ? `<div class="aa-db-detail-empty"><i class="mdi mdi-information-outline"></i><div>${AA.t('点击左侧列表中的掉落组查看组内物品')}</div></div>`
-          : DETAIL_EMPTY;
+          : isNpc ? NPC_EMPTY : DETAIL_EMPTY;
         if (isGroups) {
           gstate.selected = gstate.open; gstate.open = 0;     // opened from an item's 掉落组 tab
           loadGroups();
           if (gstate.selected) showGroup(gstate.selected);
-        } else if (state.selected) showItem(state.selected);  // back from 掉落组: show the selected item again
+        } else if (isNpc) {
+          if (nstate.selected) showNpc(nstate.selected);
+        } else if (isItem && state.selected) showItem(state.selected);  // back from another page: show the selected item again
       }
+      if (isNpc) renderNpcs(path[1] ? path[1][0] : '');
       if (isItem) {
         renderItems(path.map((n) => n[0]).join('/'));
         showStats(!NON_GEAR.includes(path[1] && path[1][0]));
@@ -764,6 +925,7 @@
     // 技能相关 / 制作 / 消耗品 are ordinary items, not gear: no 附加属性 filter there
     const NON_GEAR = ['skillrelated', 'making', 'consumable'];
     const showStats = (on) => ['f-stats-toggle', 'f-stats'].forEach((id) => { document.getElementById(id).style.display = on ? '' : 'none'; });
+    let pageKind = 'item';                     // what the detail card currently belongs to
     window.addEventListener('hashchange', render);
     render();
   </script>

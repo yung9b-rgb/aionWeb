@@ -180,6 +180,17 @@ py tools/build_db_dropgroups.py --common <服务端>/Map/XML/CommonDropItems.xml
 
 `--zh` / `--en` 用来显示引用这个组的 NPC 的名称，格式和物品缓存一样；不给时显示 NPC 的内部名。
 
+「NPC」页面的数据 `data/db_npcs.json`（不在仓库里，也要先生成物品表，用来认出哪些掉落是装备）：
+
+```bash
+py tools/build_db_npcs.py --npcs <服务端>/Map/XML/npcs.xml --common <服务端>/Map/XML/CommonDropItems.xml --worlds <服务端>/Map/Worlds --ai <服务端>/Map/XML --zh <客户端中文字符串> --en <客户端英文字符串>
+```
+
+- 天族 / 魔族：race_type 是 pc_light / gchief_light（或对应的 dark）的 NPC，也就是两族自己的守卫、商人、深渊驻军。
+- 命名BOSS：带 named_monster 标记，并且有专属掉落——某件装备只有它会掉（同名的不同等级版本算同一只），或者它引用了一个别的怪都不引用、里面有装备的掉落组。
+- 头目：其余带 named_monster 标记的怪。怪物：其余可攻击的 NPC。
+- "别的怪"只算真的会刷出来的：出现在 `Map/Worlds/<地图>/world.xml`，或被 `NpcAIPatterns*.xml` 的 `<npc_nameid>` 召唤。地图名取客户端的 `STR_ZONE_NAME_<地图目录名>`。
+
 ## 目录
 
 | 路径 | 说明 |
@@ -202,6 +213,7 @@ py tools/build_db_dropgroups.py --common <服务端>/Map/XML/CommonDropItems.xml
 | `tools/build_db_items.py` | 生成静态数据库物品表 `data/db_items.json`（不在仓库里，见「静态数据库的物品表」） |
 | `tools/build_db_icons.py` | 从客户端导出物品图标到 `public/icons/item/`（不在仓库里） |
 | `tools/build_db_dropgroups.py` | 生成掉落组数据 `data/db_dropgroups.json`（不在仓库里） |
+| `tools/build_db_npcs.py` | 生成 NPC 数据 `data/db_npcs.json`（不在仓库里） |
 | `tools/check_db.ts` | `npm run db:check`：不启动后台，单独检查 SQL Server 连接 |
 | `data/shop.json` | 初始商品目录（数据库为空时导入） |
 | `db/` | 建表 SQL 和脱敏示例备份 |

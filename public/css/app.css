@@ -138,3 +138,15 @@ select.form-control, .dataTables_wrapper select { color: #212529 !important; }
 .aa-side-title { font-weight: 600; margin-bottom: 6px; }
 .aa-side-kv { display: flex; justify-content: space-between; gap: 12px; }
 .aa-side-kv > span { color: #6c7383; }
+
+/* 静态数据库 NPC list */
+.aa-npc-boss { color: #e0a100; font-weight: 600; }
+.aa-npc-chief { color: #2a7be4; font-weight: 600; }
+.aa-npc-light { color: #1e8fc6; }
+.aa-npc-dark { color: #8a4fd0; }
+.aa-tip .aa-npc-monster, .aa-tip .aa-npc-other { color: #e8ebf2; }
+.aa-tip .aa-npc-chief { color: #5aa2ff; }
+.aa-tip .aa-npc-light { color: #5ec4f5; }
+.aa-tip .aa-npc-dark { color: #b48cf0; }
+.aa-tip.aa-tip-npc { width: 430px; }   /* no trade-rules row to size it, so a fixed width like the item card */
+.aa-npc-cat { display: inline-block; font-size: .72rem; color: #6c7383; background: #eef0f5; border-radius: 3px; padding: 0 6px; margin-left: 6px; }
