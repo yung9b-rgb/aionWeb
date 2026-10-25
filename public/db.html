@@ -793,7 +793,8 @@
     }
 
     // GM commands for the NPC (type them in game chat with the GM proxy running):
-    //   //teleport_to_named <id>  Server64 HandleBuilderOperation: finds a live NPC with that name id and moves you to it
+    //   //teleport_to_named <internal name>  Server64 HandleBuilderOperation: XML_ParseNPCNameId turns the name into the
+    //                            name id, then a live NPC with it is looked up and you are moved to it
     //   //wishid <count> <id>     spawns <count> of it next to you;  //wish <internal name> does the same by name
     const copyRow = (cmd) => `<div class="input-group input-group-sm mb-2">
         <input type="text" class="form-control aa-mono" value="${AA.esc(cmd)}" readonly>
@@ -801,7 +802,7 @@
     const npcGm = (n) => `<div class="aa-item-side">
         <div class="aa-side-box">
           <div class="aa-side-title">${AA.t('前往这个 NPC')}</div>
-          ${copyRow(`//teleport_to_named ${n.id}`)}
+          ${copyRow(`//teleport_to_named ${n.k}`)}
           <div class="text-muted small">${AA.t('它要已经刷出来并且活着；有多只时去其中一只。')}</div>
         </div>
         <div class="aa-side-box">
