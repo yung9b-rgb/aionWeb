@@ -124,6 +124,8 @@
         ['consumable', '消耗品', [['food', '食品'], ['potion', '药水'], ['magical', '魔法物品'],
           ['mod', '改造', [['enchant', '强化石'], ['option', '魔石'], ['proc', '神石'], ['dye', '染色剂'], ['misc', '其他']]],
           ['misc', '其他']]],
+        '-',
+        ['dropgroup', '掉落组'],
       ]],
       ['skill', '技能', null],
       ['quest', '任务', null],
@@ -308,7 +310,8 @@
           ? `<li class="breadcrumb-item active">${AA.esc(AA.t(title))}</li>`
           : `<li class="breadcrumb-item"><a href="#${acc}">${AA.esc(AA.t(title))}</a></li>`;
       }).join('');
-      const isItem = path[0] && path[0][0] === 'item';
+      // 掉落组 lives under 物品 in the menu but is its own page (not built yet), not an item list
+      const isItem = path[0] && path[0][0] === 'item' && !(path[1] && path[1][0] === 'dropgroup');
       document.getElementById('db-items').classList.toggle('d-none', !isItem);
       document.getElementById('db-empty').classList.toggle('d-none', isItem);
       if (isItem) {
