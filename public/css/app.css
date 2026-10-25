@@ -120,6 +120,7 @@ select.form-control, .dataTables_wrapper select { color: #212529 !important; }
 .aa-tip-kv > span { color: #a3a9b6; white-space: nowrap; }
 .aa-tip-kv > b { font-weight: 500; text-align: right; }
 .aa-tip-bonus > b { color: #4fd18b; }
+.aa-tip-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 28px; }
 .aa-tip-desc { color: #c9b98a; white-space: pre-line; }
 .aa-tip-tag { display: inline-block; background: #2b2f38; border-radius: 3px; padding: 1px 8px; margin: 0 6px 6px 0; font-size: .78rem; }
 .aa-tip-rules { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .78rem; }

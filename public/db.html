@@ -347,6 +347,8 @@
     const iconBox = (q, ic, big) => `<span class="aa-db-icon aa-db-icon-${AA.esc(q)}${big ? ' aa-db-icon-lg' : ''}">${ic ? `<img src="icons/item/${encodeURIComponent(ic)}.png" alt="" onerror="this.remove()">` : ''}</span>`;
     const refName = (r) => (r.id ? `<span class="aa-quality-${AA.esc(r.q)}" data-no-i18n>${AA.esc(nameOf(r))}</span>` : `<span class="aa-mono">${AA.esc(r.k)}</span>`);
     const kv = (rows) => rows.filter(Boolean).map(([k, v, cls]) => `<div class="aa-tip-kv${cls ? ' ' + cls : ''}"><span>${AA.t(k)}</span><b>${v}</b></div>`).join('');
+    // stats sit in two columns, like the in-game tooltip
+    const grid = (body) => (body ? `<div class="aa-tip-grid">${body}</div>` : '');
     const sec = (title, body) => (body ? `<div class="aa-tip-sec">${title ? `<div class="aa-tip-title">${AA.t(title)}</div>` : ''}${body}</div>` : '');
 
     async function showItem(id) {
@@ -461,8 +463,8 @@
           f.gender_permitted && f.gender_permitted !== 'all' && ['性别', AA.t(GENDER[f.gender_permitted] ?? f.gender_permitted)],
           ['可用职业', classLine],
         ]))}
-        ${sec('基本属性', base)}
-        ${sec('附加属性', bonus)}
+        ${sec('基本属性', grid(base))}
+        ${sec('附加属性', grid(bonus))}
         ${sec('强化', kv([sockets && ['魔石孔', sockets], enchant && ['最高强化', enchant]]))}
         ${sec('使用', use)}
         ${desc ? `<div class="aa-tip-sec aa-tip-desc" data-no-i18n>${AA.esc(desc)}</div>` : ''}
