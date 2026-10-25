@@ -51,7 +51,7 @@ export function queryItems(q: ItemQuery) {
     && (!q.qualities.length || q.qualities.includes(it.q))
     && q.stats.every((k) => it.st && k in it.st)
     && (!s || String(it.id).startsWith(s) || it.zh.toLowerCase().includes(s) || it.en.toLowerCase().includes(s) || it.k.toLowerCase().includes(s)));
-  const size = Math.min(Math.max(q.size, 1), 500);
+  const size = Math.min(Math.max(q.size, 1), 100);
   const pages = Math.max(1, Math.ceil(rows.length / size));
   const page = Math.min(Math.max(q.page, 1), pages);
   return {

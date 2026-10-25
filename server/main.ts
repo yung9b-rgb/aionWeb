@@ -184,7 +184,7 @@ route('GET', '/api/db/items', async (_req, url) => {
   return queryItems({
     cat: (p.get('cat') ?? '').replace(/^item\/?/, ''), lvMin: num(p.get('lvMin')), lvMax: num(p.get('lvMax')),
     races: list(p.get('race')).map(Number).filter((x) => x === 0 || x === 1), qualities: list(p.get('q')), stats: list(p.get('stats')),
-    search: p.get('search') ?? '', hidden: p.get('hidden') === '1', page: num(p.get('page')) ?? 1, size: num(p.get('size')) ?? 100,
+    search: p.get('search') ?? '', hidden: p.get('hidden') === '1', page: num(p.get('page')) ?? 1, size: num(p.get('size')) ?? 10,
   });
 });
 route('GET', '/api/db/items/(\\d+)', async (_req, _url, m) => {
