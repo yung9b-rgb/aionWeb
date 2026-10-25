@@ -560,7 +560,7 @@
       </div>`;
     }
 
-    // hover an item row (data-tip-item) for 1 s: the item card floats next to it. Details are fetched once per item.
+    // hover an item row (data-tip-item) for 0.5 s: the item card floats next to it. Details are fetched once per item.
     const tipCache = new Map();
     const tipBox = document.createElement('div');
     tipBox.className = 'aa-itip d-none';
@@ -588,7 +588,7 @@
         tipBox.innerHTML = itemInfo(it);
         tipBox.classList.remove('d-none');
         placeTip(row);
-      }, 1000);
+      }, 500);
     });
     window.addEventListener('scroll', hideTip, true);
 
