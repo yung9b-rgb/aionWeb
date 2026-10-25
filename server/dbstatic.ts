@@ -202,7 +202,7 @@ function itemGroups(id: number) {
     const maxAdj = g.npcs?.[0]?.[1] ?? 0;
     return { id: gid, name: g.name, weight: w, total: g.items.reduce((n, [, x]) => n + x, 0), users: g.users,
       best: Math.min(w * maxAdj / 100, 1e7) };
-  });
+  }).sort((a, b) => b.weight - a.weight || a.id - b.id);     // most likely first
 }
 
 export function getGroup(id: number) {
@@ -217,7 +217,7 @@ export function getGroup(id: number) {
       const it = typeof iid === 'number' ? byId.get(iid) : undefined;
       return { id: typeof iid === 'number' ? iid : 0, k: it?.k ?? String(iid), zh: it?.zh ?? '', en: it?.en ?? '', lv: it?.lv ?? 0,
         q: it?.q ?? '', ic: it?.ic, weight: w };
-    }),
+    }).sort((a, b) => b.weight - a.weight),                    // most likely first (the roll itself uses file order)
     // referencing NPCs; chance = this group's total per kill for that NPC (capped at 100%), in 1/10,000,000
     npcs: (g.npcs ?? []).map(([nid, adj]) => {
       const n = npcs[String(nid)];
@@ -339,12 +339,12 @@ export function getNpc(id: number) {
     f: raw?.f ?? [], cash: raw?.cash ?? [0, 0, 0],
     // direct items: each rolled on its own, chance min(prob, 70%) per kill at drop rate 100
     drops: (raw?.d ?? []).map(([k, count, prob, idx]: [string, number, number, string]) =>
-      ({ ...item(k), count, prob, chance: Math.min(prob, 7e6), idx })),
+      ({ ...item(k), count, prob, chance: Math.min(prob, 7e6), idx })).sort((a: any, b: any) => b.chance - a.chance),
     // common groups: one roll each, at most one item; chance = group total x adjustment / 100 (adjustment <= 0: not rolled)
     groups: (raw?.cd ?? []).map(([name, adj, idx]: [string, number, string]) => {
       const g = groupsByName?.map.get(name.toLowerCase());
       const total = g ? g.items.reduce((s, [, w]) => s + w, 0) : 0;
       return { id: g?.id ?? 0, name, adj, idx, items: g?.items.length ?? 0, chance: adj > 0 ? Math.min(total * adj / 100, 1e7) : 0 };
-    }),
+    }).sort((a: any, b: any) => b.chance - a.chance),          // most likely first; groups that never roll last
   };
 }

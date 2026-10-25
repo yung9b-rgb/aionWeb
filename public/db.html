@@ -642,7 +642,7 @@
           : `<span class="text-muted">${AA.t(n.ai ? '由其他 NPC 召唤' : '无刷新点')}</span>`;
         return `<tr data-nid="${n.id}" class="aa-db-row${n.id === nstate.selected ? ' table-active' : ''}">
           <td class="aa-mono">${n.id}</td>
-          <td data-no-i18n><span class="aa-npc-${inInst && !FACTION.includes(n.c) ? 'monster' : n.c || 'other'}">${AA.esc(npcName(n))}</span>
+          <td data-no-i18n><span class="${npcCls(n)}">${AA.esc(npcName(n))}</span>
             ${(!nstate.cat && n.c) || (inInst && FACTION.includes(n.c)) ? `<span class="aa-npc-cat">${AA.t(NPC_CAT[n.c])}</span>` : ''}
             ${title ? `<div class="text-muted small">&lt;${AA.esc(title)}&gt;</div>` : ''}</td>
           <td>${n.lv}</td><td>${gradeName(n.grade)}</td><td class="small" data-no-i18n>${where}</td>
@@ -667,6 +667,8 @@
     document.getElementById('n-region').addEventListener('change', (e) => { toggle(nstate.regions, e.target.value); nreload(); });
 
     const FACTION = ['light', 'dark'];
+    // monsters are coloured by grade (普通 grey, 精英 green, 英雄 blue, 传说 gold); the factions' NPCs by side
+    const npcCls = (n) => (FACTION.includes(n.c) ? 'aa-npc-' + n.c : n.c ? 'aa-grade-' + (n.grade || 'normal') : 'aa-npc-other');
     function renderNpcs(cat, map) {
       document.getElementById('n-region').classList.toggle('d-none', cat === 'instance');
       if (cat !== nstate.cat || map !== nstate.map) {
@@ -727,7 +729,7 @@
       const maps = [...new Set((n.maps || []).map((w) => (AA.lang === 'en' ? n.mapNames[w][1] : n.mapNames[w][0]) || w))];
       box.innerHTML = `<div class="aa-tip aa-tip-npc">
         <div class="aa-tip-name">
-          <div class="aa-tip-title-name aa-npc-${n.c || 'other'}" data-no-i18n>${AA.esc(npcName(n))}</div>
+          <div class="aa-tip-title-name ${npcCls(n)}" data-no-i18n>${AA.esc(npcName(n))}</div>
           ${title ? `<div class="aa-tip-dim" data-no-i18n>&lt;${AA.esc(title)}&gt;</div>` : ''}
           <div class="aa-tip-dim aa-mono">${n.id} · ${AA.esc(n.k)}</div>
         </div>
@@ -912,7 +914,7 @@
             <td class="aa-mono">${g.total ? (it.weight / g.total * 100).toFixed(1) + '%' : ''}</td>
           </tr>`).join('') || `<tr><td colspan="5" class="text-muted text-center py-3">${AA.t('没有符合条件的物品')}</td></tr>`;
         document.getElementById('gd-note').textContent = AA.t('每次概率按掉落系数 100 计算；引用这个组的怪物会再乘上自己的掉落系数 / 100。')
-          + (g.total > 1e7 ? ' ' + AA.t('这个组合计超过 100%，只配合小于 100 的掉落系数使用；系数过大时排在后面的物品会被挤掉。') : '');
+          + (g.total > 1e7 ? ' ' + AA.t('这个组合计超过 100%，只配合小于 100 的掉落系数使用；系数过大时，CommonDropItems.xml 里排在后面的物品会被挤掉（表格按概率排序，不是文件顺序）。') : '');
       } else {
         document.getElementById('gd-head').innerHTML = `<tr><th style="width:90px">ID</th><th>${AA.t('NPC')}</th><th style="width:50px">${AA.t('等级')}</th>
           <th style="width:86px" title="${AA.t('npcs.xml 的 common_drop_adjustment，100 = 原值')}">${AA.t('掉落系数')}</th>
