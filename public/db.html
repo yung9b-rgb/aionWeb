@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>静态数据库 · 永恒之塔 GM</title>
+  <link rel="stylesheet" href="vendors/mdi/css/materialdesignicons.min.css">
+  <link rel="stylesheet" href="vendors/base/vendor.bundle.base.css">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="shortcut icon" href="images/favicon.png" />
+</head>
+<body>
+  <div class="container-scroller">
+    <div id="aa-navbar"></div>
+    <div class="container-fluid page-body-wrapper">
+      <div id="aa-sidebar"></div>
+      <div class="main-panel">
+        <div class="content-wrapper">
+          <div class="row">
+            <div class="col-md-12 grid-margin">
+              <h2>静态数据库</h2>
+              <p class="text-muted mb-0">查询服务端的静态数据（物品、技能、任务、NPC）。从下面的菜单选择分类。</p>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-12 grid-margin">
+              <ul class="aa-dbmenu" id="dbmenu"></ul>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-12 grid-margin stretch-card">
+              <div class="card">
+                <div class="card-body">
+                  <nav aria-label="breadcrumb"><ol class="breadcrumb aa-db-crumb mb-3" id="crumb"></ol></nav>
+                  <div id="db-body"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="aa-footer"></div>
+      </div>
+    </div>
+  </div>
+  <script src="vendors/base/vendor.bundle.base.js"></script>
+  <script src="js/i18n.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/off-canvas.js"></script>
+  <script src="js/hoverable-collapse.js"></script>
+  <script src="js/template.js"></script>
+  <script>
+    // Category tree. Item branch copied from Aion Codex (cn1) Items menu, minus 自定义 / 设置物 (housing, later versions).
+    // Each node: [key, title, children?]. The route is the key path, e.g. #item/armor/chain/chest.
+    const CLASSES12 = [['fighter', '剑星'], ['knight', '守护星'], ['assassin', '杀星'], ['ranger', '弓星'], ['wizard', '魔道星'],
+      ['elementalist', '精灵星'], ['priest', '治愈星'], ['chanter', '护法星'], ['thunderer', 'Thunderer'], ['battlemaster', 'Battlemaster'],
+      ['lumines', 'Lumines'], ['runeblade', 'Runeblade']];
+    const PARTS = [['chest', '上衣'], ['hands', '装甲'], ['shoulders', '护肩'], ['legs', '下衣'], ['feet', '鞋']];
+    const TREE = [
+      ['item', '物品', [
+        ['weapon', '武器', [['sword', '长剑'], ['dagger', '短剑'], ['mace', '权杖'], ['orb', '宝珠'], ['grimoire', '法典'],
+          ['2h_sword', '巨剑'], ['polearm', '战戟'], ['staff', '法杖'], ['bow', '弓'],
+          ['chainsword', 'Chainsword'], ['gauntlet', 'Gauntlet'], ['dimsword', 'Dimsword']]],
+        ['armor', '防具', [['cloth', '衣服', PARTS], ['robe', '布甲', PARTS], ['leather', '皮甲', PARTS], ['chain', '链甲', PARTS],
+          ['plate', '金属', PARTS], ['shield', '盾牌']]],
+        ['accessory', '饰品', [['headgear', '头饰'], ['earring', '耳环'], ['necklace', '项链'], ['ring', '戒指'], ['belt', '腰带']]],
+        ['wing', '翅膀'],
+        '-',
+        ['skillrelated', '技能相关', [['stigma', '烙印', CLASSES12], ['book', '技能书', CLASSES12]]],
+        ['making', '制作', [
+          ['material', '材料', [['gather', '采集'], ['drop', '获得'], ['part', '部件']]],
+          ['recipes', '图案', [['weaponsmith', '武器制作'], ['armorsmith', '金属盔甲制作'], ['tailoring', '裁缝'], ['handiwork', '手工'],
+            ['alchemy', '炼金术'], ['cooking', '料理'], ['convert', '物质变幻'], ['order', '制作委托']]]]],
+        ['consumable', '消耗品', [['food', '食品'], ['potion', '药水'], ['magical', '魔法物品'],
+          ['mod', '改造', [['enchant', '强化石'], ['option', '魔石'], ['proc', '神石'], ['dye', '染色剂'], ['misc', '其他']]],
+          ['misc', '其他']]],
+      ]],
+      ['skill', '技能', null],
+      ['quest', '任务', null],
+      ['npc', 'NPC', null],
+    ];
+    const ICONS = { item: 'mdi-sword-cross', skill: 'mdi-flash', quest: 'mdi-book-open-variant', npc: 'mdi-account-group' };
+
+    // route string -> list of [key, title] along the path
+    function resolve(route) {
+      const keys = route.split('/').filter(Boolean);
+      let level = TREE; const path = [];
+      for (const k of keys) {
+        const n = (level || []).find((x) => Array.isArray(x) && x[0] === k);
+        if (!n) break;
+        path.push(n); level = n[2];
+      }
+      return path;
+    }
+
+    function subMenu(nodes, prefix) {
+      return `<ul class="aa-dbmenu-sub">${nodes.map((n) => {
+        if (n === '-') return '<li class="aa-dbmenu-sep"></li>';
+        const [k, title, kids] = n, r = prefix + '/' + k;
+        return `<li class="${kids ? 'has-sub' : ''}"><a href="#${r}">${AA.esc(AA.t(title))}${kids ? '<i class="mdi mdi-chevron-right"></i>' : ''}</a>${kids ? subMenu(kids, r) : ''}</li>`;
+      }).join('')}</ul>`;
+    }
+
+    document.getElementById('dbmenu').innerHTML = TREE.map(([k, title, kids]) => `
+      <li class="aa-dbmenu-top${kids ? '' : ' aa-dbmenu-empty'}" data-top="${k}">
+        <a href="#${k}"><i class="mdi ${ICONS[k]}"></i> ${AA.esc(AA.t(title))}${kids ? ' <i class="mdi mdi-chevron-down"></i>' : ''}</a>
+        ${kids ? subMenu(kids, k) : ''}
+      </li>`).join('');
+
+    // close the open flyout after a click so the page underneath is visible
+    document.getElementById('dbmenu').addEventListener('click', (e) => {
+      if (!e.target.closest('a')) return;
+      const m = document.getElementById('dbmenu');
+      m.classList.add('aa-dbmenu-closed');
+      setTimeout(() => m.classList.remove('aa-dbmenu-closed'), 300);
+    });
+
+    function render() {
+      const route = decodeURIComponent(location.hash.slice(1)) || 'item';
+      const path = resolve(route);
+      document.querySelectorAll('.aa-dbmenu-top').forEach((li) => li.classList.toggle('active', path[0] && li.dataset.top === path[0][0]));
+      let acc = '';
+      document.getElementById('crumb').innerHTML = path.map(([k, title], i) => {
+        acc += (acc ? '/' : '') + k;
+        return i === path.length - 1
+          ? `<li class="breadcrumb-item active">${AA.esc(AA.t(title))}</li>`
+          : `<li class="breadcrumb-item"><a href="#${acc}">${AA.esc(AA.t(title))}</a></li>`;
+      }).join('');
+      const node = path[path.length - 1];
+      const body = document.getElementById('db-body');
+      if (!node) { body.innerHTML = ''; return; }
+      if (!node[2] && path.length === 1) {
+        body.innerHTML = `<p class="text-muted mb-0">${AA.t('这个模块还没开发。')}</p>`;
+        return;
+      }
+      const kids = (node[2] || []).filter((n) => n !== '-');
+      const chips = kids.length
+        ? `<div class="aa-db-chips mb-3">${kids.map(([k, t]) => `<a class="btn btn-sm btn-outline-primary" href="#${route}/${k}">${AA.esc(AA.t(t))}</a>`).join('')}</div>`
+        : '';
+      body.innerHTML = `${chips}
+        <div class="table-responsive">
+          <table class="table table-sm table-hover">
+            <thead><tr><th>ID</th><th>${AA.t('名称')}</th><th>${AA.t('等级')}</th><th>${AA.t('品质')}</th><th>${AA.t('说明')}</th></tr></thead>
+            <tbody><tr><td colspan="5" class="text-muted">${AA.t('数据表格（待开发）：{0}', AA.esc(route))}</td></tr></tbody>
+          </table>
+        </div>`;
+    }
+    window.addEventListener('hashchange', render);
+    render();
+  </script>
+</body>
+</html>

@@ -53,6 +53,7 @@
     { href: 'proxy.html', icon: 'mdi-swap-horizontal', title: '数据报文抓取' },
     { href: 'shop.html', icon: 'mdi-store', title: '游戏商城' },
     { href: 'points.html', icon: 'mdi-cash-multiple', title: '点券管理' },
+    { href: 'db.html', icon: 'mdi-database-search', title: '静态数据库' },
     { href: 'adminlog.html', icon: 'mdi-history', title: '操作记录' },
     { href: '#', icon: 'mdi-console', title: 'GM 命令', soon: true },
   ];

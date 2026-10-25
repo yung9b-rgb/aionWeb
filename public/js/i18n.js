@@ -20,6 +20,11 @@ window.AA_I18N_EN = {
   "游戏商城": "Cash Shop",
   "点券管理": "Points",
   "操作记录": "Admin Log",
+  "静态数据库": "Static Database",
+  "静态数据库 · 永恒之塔 GM": "Static Database · Aion GM",
+  "查询服务端的静态数据（物品、技能、任务、NPC）。从下面的菜单选择分类。": "Browse the server's static data (items, skills, quests, NPCs). Pick a category from the menu below.",
+  "这个模块还没开发。": "This module is not built yet.",
+  "数据表格（待开发）：{0}": "Data table (to be built): {0}",
   "GM 命令": "GM Commands",
 
   "仪表盘 · 永恒之塔 GM": "Dashboard · Aion GM",
