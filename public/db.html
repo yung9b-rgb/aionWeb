@@ -55,6 +55,8 @@
                       <div class="aa-db-fhead">附加属性</div>
                       <div class="aa-db-stats" id="f-stats"></div>
                     </div>
+                    <div class="row aa-db-split">
+                    <div class="col-lg-6">
                     <div class="aa-db-bar">
                       <div class="d-flex align-items-center gap-2">
                         <span>显示</span>
@@ -66,7 +68,7 @@
                       </div>
                       <div class="d-flex align-items-center gap-2">
                         <span>搜索：</span>
-                        <input type="text" class="form-control form-control-sm" id="f-q" placeholder="名称或 ID" style="width:220px">
+                        <input type="text" class="form-control form-control-sm" id="f-q" placeholder="名称或 ID" style="width:180px">
                       </div>
                     </div>
                     <div class="aa-db-bar">
@@ -78,6 +80,13 @@
                         <thead id="t-head"></thead>
                         <tbody id="t-body"></tbody>
                       </table>
+                    </div>
+                    </div>
+                    <div class="col-lg-6">
+                      <div class="aa-db-detail" id="db-detail">
+                        <div class="aa-db-detail-empty"><i class="mdi mdi-information-outline"></i><div>点击左侧列表中的物品查看详情</div></div>
+                      </div>
+                    </div>
                     </div>
                   </div>
                 </div>
@@ -167,21 +176,20 @@
       '物理致命一击抵抗', '魔法致命一击抵抗', '盾牌防御', '武器防御', '对人攻击力', '对人防御力', '治愈量增加',
       '火属性防御', '水属性防御', '地属性防御', '风属性防御', '移动速度', '飞行速度', '敌对值增加率',
       '眩晕抵抗', '沉默抵抗', '麻痹抵抗', '束缚抵抗', '睡眠抵抗'];
-    const state = { races: new Set(), qualities: new Set(), stats: new Set(), cols: ['', '', ''] };
+    const state = { races: new Set(), qualities: new Set(), stats: new Set() };
 
     document.getElementById('f-quality').innerHTML = `<label>${AA.t('品质')}</label>` + QUALITIES.map(([k, t]) =>
       `<label class="aa-db-q aa-quality-${k}"><input type="checkbox" value="${k}"> ${AA.t(t)}</label>`).join('');
     document.getElementById('f-stats').innerHTML = STATS.map((s) => `<button type="button" data-stat="${AA.esc(s)}">${AA.esc(AA.t(s))}</button>`).join('');
 
     function headHtml() {
-      const opt = (v) => `<option value="">${AA.t('统计')}</option>` + STATS.map((s) => `<option value="${AA.esc(s)}"${s === v ? ' selected' : ''}>${AA.esc(AA.t(s))}</option>`).join('');
-      return `<tr><th style="width:110px">ID</th><th style="width:56px"></th><th>${AA.t('物品名称')}</th><th style="width:80px">${AA.t('等级')}</th>
-        <th style="width:80px">${AA.t('魔石孔')}</th>${state.cols.map((v, i) => `<th style="width:170px"><select class="form-control form-control-sm" data-col="${i}">${opt(v)}</select></th>`).join('')}</tr>`;
+      return `<tr><th style="width:100px">ID</th><th style="width:52px"></th><th>${AA.t('物品名称')}</th><th style="width:64px">${AA.t('等级')}</th>
+        <th style="width:72px">${AA.t('魔石孔')}</th></tr>`;
     }
 
     function renderItems(route) {
       document.getElementById('t-head').innerHTML = headHtml();
-      document.getElementById('t-body').innerHTML = `<tr><td colspan="8" class="text-muted text-center py-4">${AA.t('物品数据还没接入（分类 {0}）', AA.esc(route))}</td></tr>`;
+      document.getElementById('t-body').innerHTML = `<tr><td colspan="5" class="text-muted text-center py-4">${AA.t('物品数据还没接入（分类 {0}）', AA.esc(route))}</td></tr>`;
       document.getElementById('f-summary').textContent = AA.t('共 {0} 项', 0);
       document.getElementById('f-pager').innerHTML = `<li class="page-item disabled"><a class="page-link">${AA.t('上一页')}</a></li>
         <li class="page-item active"><a class="page-link">1</a></li><li class="page-item disabled"><a class="page-link">${AA.t('下一页')}</a></li>`;
@@ -196,15 +204,11 @@
       const b = e.target.closest('[data-stat]'); if (!b) return;
       b.classList.toggle('on'); toggle(state.stats, b.dataset.stat);
     });
-    document.getElementById('t-head').addEventListener('change', (e) => {
-      const s = e.target.closest('[data-col]'); if (s) state.cols[+s.dataset.col] = s.value;
-    });
     document.getElementById('btn-reset').addEventListener('click', () => {
       ['f-lv-min', 'f-lv-max', 'f-slot-min', 'f-slot-max', 'f-q'].forEach((id) => { document.getElementById(id).value = ''; });
       document.querySelectorAll('#db-items .on').forEach((x) => x.classList.remove('on'));
       document.querySelectorAll('#f-quality input').forEach((x) => { x.checked = false; });
-      state.races.clear(); state.qualities.clear(); state.stats.clear(); state.cols = ['', '', ''];
-      document.getElementById('t-head').innerHTML = headHtml();
+      state.races.clear(); state.qualities.clear(); state.stats.clear();
     });
 
     function render() {
