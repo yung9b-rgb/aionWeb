@@ -69,6 +69,7 @@
                         <input type="number" class="form-control form-control-sm" id="n-lv-max" min="1" max="99">
                       </div>
                       <div class="aa-db-frow" id="n-grade"></div>
+                      <div class="aa-db-frow aa-db-region" id="n-region"></div>
                     </div>
                     <div class="aa-db-bar">
                       <div class="d-flex align-items-center gap-2">
@@ -594,7 +595,7 @@
     // ---- NPC: /api/db/npcs (server-side filter + paging), detail from /api/db/npcs/:id ----
     const GRADES = [['normal', '普通'], ['elite', '精英'], ['hero', '英雄'], ['legend', '传说']];
     const NPC_CAT = { light: '天族', dark: '魔族', monster: '怪物', chief: '头目', boss: '命名BOSS', instance: '副本' };
-    const nstate = { cat: '', map: '', page: 1, grades: new Set(), sort: 'id', desc: false, seq: 0, selected: 0 };
+    const nstate = { cat: '', map: '', page: 1, grades: new Set(), regions: new Set(), sort: 'id', desc: false, seq: 0, selected: 0 };
     const gradeName = (g) => AA.t((GRADES.find(([k]) => k === g) || [, ''])[1]);
     const npcName = (n) => (AA.lang === 'en' ? (n.en || n.zh || n.k) : (n.zh || n.en || n.k));
     // titles are shown as <title>; some strings already carry the brackets
@@ -622,6 +623,7 @@
       if (val('n-lv-min')) q.set('lvMin', val('n-lv-min'));
       if (val('n-lv-max')) q.set('lvMax', val('n-lv-max'));
       if (nstate.grades.size) q.set('grade', [...nstate.grades].join(','));
+      if (nstate.regions.size && nstate.cat !== 'instance') q.set('region', [...nstate.regions].join(','));
       if (val('n-q')) q.set('search', val('n-q'));
       const seq = ++nstate.seq, body = document.getElementById('n-body');
       let d;
@@ -653,8 +655,20 @@
 
     let ntimer = 0;
     const nreload = (delay = 0) => { nstate.page = 1; clearTimeout(ntimer); ntimer = setTimeout(loadNpcs, delay); };
+    // 地区: field maps from the NPC data, one row per side; instances have their own submenu, so 副本 hides it
+    const SIDES = [['light', '天界'], ['dark', '魔界'], ['other', '其他']];
+    AA.api('GET', '/api/db/npcs/regions').then((list) => {
+      document.getElementById('n-region').innerHTML = `<label>${AA.t('地区')}</label><div class="aa-db-rgroups">${SIDES.map(([s, t]) => {
+        const maps = list.filter((r) => r.side === s);
+        return maps.length ? `<div><span class="aa-db-rside">${AA.t(t)}</span>${maps.map((r) =>
+          `<label class="aa-db-q" data-no-i18n><input type="checkbox" value="${AA.esc(r.w)}"${nstate.regions.has(r.w) ? ' checked' : ''}> ${AA.esc(AA.lang === 'en' ? r.en : r.zh)}</label>`).join('')}</div>` : '';
+      }).join('')}</div>`;
+    }).catch(() => {});
+    document.getElementById('n-region').addEventListener('change', (e) => { toggle(nstate.regions, e.target.value); nreload(); });
+
     const FACTION = ['light', 'dark'];
     function renderNpcs(cat, map) {
+      document.getElementById('n-region').classList.toggle('d-none', cat === 'instance');
       if (cat !== nstate.cat || map !== nstate.map) {
         nstate.cat = cat; nstate.map = map; nstate.selected = 0;
         document.getElementById('db-detail').innerHTML = NPC_EMPTY;
@@ -674,8 +688,8 @@
     document.getElementById('n-size').addEventListener('change', () => nreload());
     document.getElementById('n-reset').addEventListener('click', () => {
       ['n-lv-min', 'n-lv-max', 'n-q'].forEach((id) => { document.getElementById(id).value = ''; });
-      document.querySelectorAll('#n-grade input').forEach((x) => { x.checked = false; });
-      nstate.grades.clear(); nreload();
+      document.querySelectorAll('#n-grade input, #n-region input').forEach((x) => { x.checked = false; });
+      nstate.grades.clear(); nstate.regions.clear(); nreload();
     });
     document.getElementById('n-head').addEventListener('click', (e) => {
       const th = e.target.closest('[data-sort]'); if (!th) return;

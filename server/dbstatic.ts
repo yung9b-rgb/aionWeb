@@ -262,9 +262,24 @@ function loadNpcs() {
 export const npcGrade = (g: number) => (g >= 26 ? 'legend' : g >= 20 ? 'hero' : g >= 10 ? 'elite' : g >= 1 ? 'normal' : '');
 
 export type NpcQuery = {
-  cat: string; map?: string;        // cat 'instance': every listed NPC spawned in that instance (or in any instance) lvMin?: number; lvMax?: number; grades: string[]; search: string; page: number; size: number;
+  cat: string;
+  map?: string;                     // cat 'instance': every listed NPC spawned in that instance (or in any instance)
+  regions?: string[];               // field map folders (npcRegions): spawned on any of them
+  lvMin?: number; lvMax?: number; grades: string[]; search: string; page: number; size: number;
   sort?: 'id' | 'lv'; desc?: boolean;
 };
+
+// 地区 filter: the non-instance maps, by side. Field zones first, then capitals, then the rest (prisons, lobbies).
+export function npcRegions() {
+  const { maps } = loadNpcs();
+  const side = (w: string) => (/^(l|arena_l)/i.test(w) ? 'light' : /^(d|arena_d)/i.test(w) ? 'dark' : 'other');
+  const kind = (w: string) => (/^[ld]f\d/i.test(w) ? 0 : /^[ld]c\d/i.test(w) ? 1 : 2);
+  // the prison maps have no client name
+  const fallback = (w: string, en: boolean) => (/_prison$/i.test(w) ? (en ? 'Prison' : '监狱') : w);
+  return Object.entries(maps).filter(([w]) => !/^id/i.test(w))
+    .map(([w, [zh, en]]) => ({ w, zh: zh || fallback(w, false), en: en || fallback(w, true), side: side(w) }))
+    .sort((a, b) => kind(a.w) - kind(b.w) || a.w.localeCompare(b.w));
+}
 
 export function queryNpcs(q: NpcQuery) {
   const { npcs, maps, instances } = loadNpcs();
@@ -276,7 +291,9 @@ export function queryNpcs(q: NpcQuery) {
     const folders = new Set((q.map ? instances.filter((i) => i.key === q.map) : instances).flatMap((i) => i.maps));
     inCat = (n) => n.c !== '' && !!n.maps?.some((w) => folders.has(w));
   }
+  const regions = new Set(q.regions ?? []);
   const rows = npcs.filter((n) => !n.h && inCat(n)
+    && (!regions.size || !!n.maps?.some((w) => regions.has(w)))
     && (q.lvMin === undefined || n.lv >= q.lvMin) && (q.lvMax === undefined || n.lv <= q.lvMax)
     && (!q.grades.length || q.grades.includes(npcGrade(n.g)))
     && (!s || String(n.id).startsWith(s) || n.zh.toLowerCase().includes(s) || n.en.toLowerCase().includes(s)
