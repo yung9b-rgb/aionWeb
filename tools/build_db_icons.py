@@ -5,7 +5,9 @@ usage:
 
 The client keeps item icons as DDS textures inside Data/Items/Items.pak. The pak must be a standard ZIP archive
 (the one patched by Tools/aion-pak, or a pak converted with a pak tool) or a folder holding the *.dds files.
-File names are lower-cased; db_items.json refers to them through each item's icon name (field "ic").
+Most item textures are a 64x64 canvas with the 40x40 icon in the top-left corner and the rest transparent, so each
+icon is cropped to its opaque area. File names are lower-cased; db_items.json refers to them through each item's
+icon name (field "ic").
 Needs Pillow (py -m pip install pillow). The icons are game data and are not committed (see .gitignore).
 """
 import argparse, glob, io, os, sys, zipfile
@@ -40,6 +42,10 @@ def main():
     for name, data in dds_files(a.pak):
         try:
             im = Image.open(io.BytesIO(data)).convert('RGBA')
+            box = im.getchannel('A').getbbox()
+            if box and box[:2] == (0, 0) and box[2:] != im.size:     # icon in the top-left corner of a bigger canvas
+                side = max(box[2], box[3])
+                im = im.crop((0, 0, side, side))
             im.save(os.path.join(a.out, name.rsplit('.', 1)[0].lower() + '.png'), optimize=True)
             ok += 1
         except Exception as e:      # an odd texture should not stop the rest
