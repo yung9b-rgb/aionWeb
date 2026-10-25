@@ -71,3 +71,53 @@ export function getItem(id: number) {
   const it = byId.get(id);
   return it ? { ...it, statLabels: Object.fromEntries(Object.keys(it.st ?? {}).map((k) => [k, labels[k] ?? k])) } : null;
 }
+
+// ---- 掉落组: data/db_dropgroups.json, built by tools/build_db_dropgroups.py (CommonDropItems.xml + npcs.xml) ----
+// weight is per roll in 1/10,000,000 at adjustment 100; a referencing NPC scales it by its common_drop_adjustment / 100.
+type DropGroup = { id: number; name: string; items: Array<[number | string, number]>; users: number; npcs: number[] };
+const GROUPS_FILE = path.join(ROOT, 'data', 'db_dropgroups.json');
+let groupCache: { mtime: number; groups: DropGroup[]; byId: Map<number, DropGroup> } | null = null;
+
+function loadGroups() {
+  if (!fs.existsSync(GROUPS_FILE)) {
+    throw new LError('没有掉落组数据 data/db_dropgroups.json：先用 tools/build_db_dropgroups.py 生成（见 README）',
+      'No drop-group data data/db_dropgroups.json: generate it with tools/build_db_dropgroups.py (see README)');
+  }
+  const mtime = fs.statSync(GROUPS_FILE).mtimeMs;
+  if (!groupCache || groupCache.mtime !== mtime) {
+    const groups: DropGroup[] = JSON.parse(fs.readFileSync(GROUPS_FILE, 'utf8')).groups ?? [];
+    groupCache = { mtime, groups, byId: new Map(groups.map((g) => [g.id, g])) };
+  }
+  return groupCache;
+}
+
+export function queryGroups(q: { search: string; page: number; size: number; sort?: 'id' | 'items' | 'users'; desc?: boolean }) {
+  const { groups } = loadGroups();
+  const s = q.search.trim().toLowerCase();
+  const rows = groups.filter((g) => !s || String(g.id) === s || g.name.toLowerCase().includes(s));
+  const key = (g: DropGroup) => (q.sort === 'items' ? g.items.length : q.sort === 'users' ? g.users : g.id);
+  const dir = q.desc ? -1 : 1;
+  rows.sort((a, b) => (key(a) - key(b)) * dir || a.id - b.id);
+  const size = Math.min(Math.max(q.size, 1), 100);
+  const pages = Math.max(1, Math.ceil(rows.length / size));
+  const page = Math.min(Math.max(q.page, 1), pages);
+  return {
+    total: rows.length, page, pages, size, sort: q.sort ?? 'id', desc: !!q.desc,
+    rows: rows.slice((page - 1) * size, page * size).map((g) => ({ id: g.id, name: g.name, items: g.items.length, users: g.users })),
+  };
+}
+
+export function getGroup(id: number) {
+  const g = loadGroups().byId.get(id);
+  if (!g) return null;
+  const { byId } = load();
+  const total = g.items.reduce((n, [, w]) => n + w, 0);
+  return {
+    id: g.id, name: g.name, users: g.users, total,
+    items: g.items.map(([iid, w]) => {
+      const it = typeof iid === 'number' ? byId.get(iid) : undefined;
+      return { id: typeof iid === 'number' ? iid : 0, k: it?.k ?? String(iid), zh: it?.zh ?? '', en: it?.en ?? '', lv: it?.lv ?? 0,
+        q: it?.q ?? '', ic: it?.ic, weight: w };
+    }),
+  };
+}

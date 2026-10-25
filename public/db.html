@@ -34,6 +34,32 @@
                 <div class="card-body">
                   <nav aria-label="breadcrumb"><ol class="breadcrumb aa-db-crumb mb-3" id="crumb"></ol></nav>
                   <div id="db-empty" class="text-muted d-none">这个模块还没开发。</div>
+                  <div id="db-groups" class="d-none">
+                    <p class="text-muted small">服务端通用掉落组（CommonDropItems.xml）。怪物击杀时，每个引用的组掷一次，最多出组里的一件。</p>
+                    <div class="aa-db-bar">
+                      <div class="d-flex align-items-center gap-2">
+                        <span>显示</span>
+                        <select class="form-control form-control-sm" id="g-size" style="width:auto">
+                          <option selected>10</option><option>25</option><option>50</option><option>100</option>
+                        </select>
+                        <span>项结果</span>
+                      </div>
+                      <div class="d-flex align-items-center gap-2">
+                        <span>搜索：</span>
+                        <input type="text" class="form-control form-control-sm" id="g-q" placeholder="组名或 ID" style="width:180px">
+                      </div>
+                    </div>
+                    <div class="aa-db-bar">
+                      <span class="text-muted" id="g-summary"></span>
+                      <nav><ul class="pagination pagination-sm mb-0" id="g-pager"></ul></nav>
+                    </div>
+                    <div class="table-responsive">
+                      <table class="table table-hover aa-db-table">
+                        <thead id="g-head"></thead>
+                        <tbody id="g-body"></tbody>
+                      </table>
+                    </div>
+                  </div>
                   <div id="db-items">
                     <div class="aa-db-filter">
                       <div class="aa-db-frow">
@@ -202,11 +228,11 @@
       statsCount();
     }
 
-    function renderPager(page, pages) {
+    function renderPager(page, pages, id = 'f-pager') {
       const nums = [];
       for (let n = Math.max(1, page - 2); n <= Math.min(pages, page + 2); n++) nums.push(n);
       const li = (n, label, dis, act) => `<li class="page-item${dis ? ' disabled' : ''}${act ? ' active' : ''}"><a class="page-link" href="#" data-page="${n}">${label}</a></li>`;
-      document.getElementById('f-pager').innerHTML = li(page - 1, AA.t('上一页'), page <= 1)
+      document.getElementById(id).innerHTML = li(page - 1, AA.t('上一页'), page <= 1)
         + (nums[0] > 1 ? li(1, '1') + (nums[0] > 2 ? li(0, '…', true) : '') : '')
         + nums.map((n) => li(n, n, false, n === page)).join('')
         + (nums[nums.length - 1] < pages ? (nums[nums.length - 1] < pages - 1 ? li(0, '…', true) : '') + li(pages, pages) : '')
@@ -299,6 +325,101 @@
       statsCount(); reload();
     });
 
+    // ---- 掉落组 ----
+    const gstate = { page: 1, sort: 'id', desc: false, seq: 0, selected: 0, active: false };
+    const DETAIL_EMPTY = document.getElementById('db-detail').innerHTML;
+    const pct = (w) => {                       // weight is per roll in 1/10,000,000
+      const v = w / 1e5;
+      return (v >= 1 ? v.toFixed(2) : v >= 0.01 ? v.toFixed(3) : v.toFixed(4)).replace(/\.?0+$/, '') + '%';
+    };
+
+    function renderGroupHead() {
+      const th = (key, label, width) => {
+        const on = gstate.sort === key;
+        const icon = on ? (gstate.desc ? 'mdi-arrow-down' : 'mdi-arrow-up') : 'mdi-swap-vertical';
+        return `<th style="width:${width}px" class="aa-db-sort${on ? ' on' : ''}" data-sort="${key}">${label} <i class="mdi ${icon}"></i></th>`;
+      };
+      document.getElementById('g-head').innerHTML = `<tr>${th('id', 'ID', 80)}<th>${AA.t('组名')}</th>
+        ${th('items', AA.t('物品数'), 90)}${th('users', AA.t('引用怪数'), 100)}</tr>`;
+    }
+    renderGroupHead();
+
+    async function loadGroups() {
+      const q = new URLSearchParams({ page: gstate.page, size: val('g-size'), sort: gstate.sort, dir: gstate.desc ? 'desc' : 'asc' });
+      if (val('g-q')) q.set('search', val('g-q'));
+      const seq = ++gstate.seq, body = document.getElementById('g-body');
+      let d;
+      try { d = await AA.api('GET', '/api/db/dropgroups?' + q); } catch (e) {
+        if (seq === gstate.seq) body.innerHTML = `<tr><td colspan="4" class="text-danger text-center py-4">${AA.esc(e.message)}</td></tr>`;
+        return;
+      }
+      if (seq !== gstate.seq) return;
+      gstate.page = d.page;
+      body.innerHTML = d.rows.map((g) => `
+        <tr data-gid="${g.id}" class="aa-db-row${g.id === gstate.selected ? ' table-active' : ''}">
+          <td class="aa-mono">${g.id}</td><td class="aa-mono small" data-no-i18n>${AA.esc(g.name)}</td>
+          <td>${g.items}</td><td>${g.users ? AA.fmtNum(g.users) : `<span class="text-muted">0</span>`}</td>
+        </tr>`).join('') || `<tr><td colspan="4" class="text-muted text-center py-4">${AA.t('没有符合条件的掉落组')}</td></tr>`;
+      const from = d.total ? (d.page - 1) * d.size + 1 : 0, to = Math.min(d.total, d.page * d.size);
+      document.getElementById('g-summary').textContent = AA.t('第 {0} 至 {1} 项，共 {2} 项', from, to, AA.fmtNum(d.total));
+      renderPager(d.page, d.pages, 'g-pager');
+    }
+    let gtimer = 0;
+    const reloadGroups = (delay = 0) => { gstate.page = 1; clearTimeout(gtimer); gtimer = setTimeout(loadGroups, delay); };
+
+    async function showGroup(id) {
+      const box = document.getElementById('db-detail');
+      let g;
+      try { g = await AA.api('GET', '/api/db/dropgroups/' + id); } catch (e) {
+        box.innerHTML = `<div class="text-danger">${AA.esc(e.message)}</div>`; return;
+      }
+      if (!gstate.active || gstate.selected !== id) return;
+      box.innerHTML = `
+        <h4 class="mb-1 aa-mono" data-no-i18n>${AA.esc(g.name)}</h4>
+        <p class="text-muted small mb-3">ID ${g.id} · ${AA.t('{0} 件物品', g.items.length)} · ${AA.t('{0} 只怪引用', AA.fmtNum(g.users))}
+          · ${AA.t('组合计 {0}', pct(g.total))}</p>
+        <div class="table-responsive">
+          <table class="table table-sm aa-db-table">
+            <thead><tr><th style="width:52px"></th><th>${AA.t('物品')}</th><th style="width:50px">${AA.t('等级')}</th>
+              <th style="width:86px" title="${AA.t('掉落系数 100 时，每掷一次出这件的概率')}">${AA.t('每次概率')}</th>
+              <th style="width:76px">${AA.t('组内占比')}</th></tr></thead>
+            <tbody>${g.items.map((it) => `
+              <tr>
+                <td><span class="aa-db-icon aa-db-icon-${AA.esc(it.q)}">${it.ic ? `<img src="icons/item/${encodeURIComponent(it.ic)}.png" alt="" loading="lazy" onerror="this.remove()">` : ''}</span></td>
+                <td data-no-i18n class="text-nowrap"><span class="aa-quality-${AA.esc(it.q)}">${AA.esc(nameOf(it))}</span>
+                  <div class="text-muted small aa-mono">${it.id || ''}</div></td>
+                <td>${it.lv || ''}</td><td class="aa-mono">${pct(it.weight)}</td>
+                <td class="aa-mono">${g.total ? (it.weight / g.total * 100).toFixed(1) + '%' : ''}</td>
+              </tr>`).join('')}</tbody>
+          </table>
+        </div>
+        <p class="text-muted small mb-0">${AA.t('每次概率按掉落系数 100 计算；引用这个组的怪物会再乘上自己的掉落系数 / 100。')}
+          ${g.total > 1e7 ? AA.t('这个组合计超过 100%，只配合小于 100 的掉落系数使用；系数过大时排在后面的物品会被挤掉。') : ''}</p>`;
+    }
+
+    document.getElementById('g-head').addEventListener('click', (e) => {
+      const th = e.target.closest('[data-sort]'); if (!th) return;
+      if (gstate.sort === th.dataset.sort) gstate.desc = !gstate.desc;
+      else { gstate.sort = th.dataset.sort; gstate.desc = th.dataset.sort !== 'id'; }   // counts: biggest first
+      renderGroupHead(); reloadGroups();
+    });
+    document.getElementById('g-q').addEventListener('input', () => reloadGroups(350));
+    document.getElementById('g-size').addEventListener('change', () => reloadGroups());
+    document.getElementById('g-pager').addEventListener('click', (e) => {
+      const a = e.target.closest('[data-page]'); if (!a) return;
+      e.preventDefault();
+      const n = +a.dataset.page;
+      if (!n || a.parentElement.classList.contains('disabled') || a.parentElement.classList.contains('active')) return;
+      gstate.page = n; loadGroups();
+    });
+    document.getElementById('g-body').addEventListener('click', (e) => {
+      const tr = e.target.closest('tr[data-gid]'); if (!tr) return;
+      gstate.selected = +tr.dataset.gid;
+      document.querySelectorAll('#g-body tr.table-active').forEach((x) => x.classList.remove('table-active'));
+      tr.classList.add('table-active');
+      showGroup(gstate.selected);
+    });
+
     function render() {
       const route = decodeURIComponent(location.hash.slice(1)) || 'item';
       const path = resolve(route);
@@ -310,10 +431,19 @@
           ? `<li class="breadcrumb-item active">${AA.esc(AA.t(title))}</li>`
           : `<li class="breadcrumb-item"><a href="#${acc}">${AA.esc(AA.t(title))}</a></li>`;
       }).join('');
-      // 掉落组 lives under 物品 in the menu but is its own page (not built yet), not an item list
-      const isItem = path[0] && path[0][0] === 'item' && !(path[1] && path[1][0] === 'dropgroup');
+      // 掉落组 lives under 物品 in the menu but is its own page, not an item list
+      const isGroups = path[0] && path[0][0] === 'item' && path[1] && path[1][0] === 'dropgroup';
+      const isItem = path[0] && path[0][0] === 'item' && !isGroups;
       document.getElementById('db-items').classList.toggle('d-none', !isItem);
-      document.getElementById('db-empty').classList.toggle('d-none', isItem);
+      document.getElementById('db-groups').classList.toggle('d-none', !isGroups);
+      document.getElementById('db-empty').classList.toggle('d-none', isItem || isGroups);
+      if (isGroups !== gstate.active) {           // entering / leaving 掉落组 resets the detail card
+        gstate.active = isGroups;
+        document.getElementById('db-detail').innerHTML = isGroups
+          ? `<div class="aa-db-detail-empty"><i class="mdi mdi-information-outline"></i><div>${AA.t('点击左侧列表中的掉落组查看组内物品')}</div></div>`
+          : DETAIL_EMPTY;
+        if (isGroups) { gstate.selected = 0; loadGroups(); }
+      }
       if (isItem) {
         renderItems(path.map((n) => n[0]).join('/'));
         showStats(!NON_GEAR.includes(path[1] && path[1][0]));

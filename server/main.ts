@@ -8,7 +8,7 @@ import { dbTarget, pool as gamePool } from './db.ts';
 import { announce } from './cached.ts';
 import { serviceStatus, summary, listCharacters, getCharacter, sendMail, validateMailItems, listAccounts, findCashMail } from './game.ts';
 import { loadItems, tryLoadItems, itemsCacheExists, searchItems } from './items.ts';
-import { queryItems, getItem } from './dbstatic.ts';
+import { queryItems, getItem, queryGroups, getGroup } from './dbstatic.ts';
 import { GmProxy } from './gmproxy.ts';
 import { ShopServer } from './shopserver.ts';
 import { ShopAgentServer } from './shopagent.ts';
@@ -192,6 +192,17 @@ route('GET', '/api/db/items/(\\d+)', async (_req, _url, m) => {
   const it = getItem(Number(m[1]));
   if (!it) throw new HttpError(404, L('物品不存在', 'Item not found'));
   return it;
+});
+
+route('GET', '/api/db/dropgroups', async (_req, url) => {
+  const p = url.searchParams, s = p.get('sort');
+  return queryGroups({ search: p.get('search') ?? '', page: num(p.get('page')) ?? 1, size: num(p.get('size')) ?? 10,
+    sort: s === 'items' || s === 'users' ? s : 'id', desc: p.get('dir') === 'desc' });
+});
+route('GET', '/api/db/dropgroups/(\\d+)', async (_req, _url, m) => {
+  const g = getGroup(Number(m[1]));
+  if (!g) throw new HttpError(404, L('掉落组不存在', 'Drop group not found'));
+  return g;
 });
 
 route('POST', '/api/mail/preview', async (req) => {

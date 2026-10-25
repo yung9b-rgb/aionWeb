@@ -171,6 +171,12 @@ py tools/build_db_items.py --items <服务端>/Map/XML/L10N/items.xml --zh <客�
 py tools/build_db_icons.py --pak <客户端>/Data/Items/Items.pak
 ```
 
+「掉落组」页面的数据 `data/db_dropgroups.json` 从服务端的通用掉落组和 NPC 表生成（先生成物品表，组里的物品名靠它换成编号；不在仓库里）：
+
+```bash
+py tools/build_db_dropgroups.py --common <服务端>/Map/XML/CommonDropItems.xml --npcs <服务端>/Map/XML/npcs.xml
+```
+
 ## 目录
 
 | 路径 | 说明 |
@@ -192,6 +198,7 @@ py tools/build_db_icons.py --pak <客户端>/Data/Items/Items.pak
 | `tools/build_items_cache.py` | 生成物品缓存 `data/items_cache.json`（不在仓库里，见「物品缓存」） |
 | `tools/build_db_items.py` | 生成静态数据库物品表 `data/db_items.json`（不在仓库里，见「静态数据库的物品表」） |
 | `tools/build_db_icons.py` | 从客户端导出物品图标到 `public/icons/item/`（不在仓库里） |
+| `tools/build_db_dropgroups.py` | 生成掉落组数据 `data/db_dropgroups.json`（不在仓库里） |
 | `tools/check_db.ts` | `npm run db:check`：不启动后台，单独检查 SQL Server 连接 |
 | `data/shop.json` | 初始商品目录（数据库为空时导入） |
 | `db/` | 建表 SQL 和脱敏示例备份 |
