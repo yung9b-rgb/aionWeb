@@ -560,6 +560,38 @@
       </div>`;
     }
 
+    // hover an item row (data-tip-item) for 1 s: the item card floats next to it. Details are fetched once per item.
+    const tipCache = new Map();
+    const tipBox = document.createElement('div');
+    tipBox.className = 'aa-itip d-none';
+    document.body.appendChild(tipBox);
+    let tipTimer = 0, tipRow = null;
+    function placeTip(row) {
+      const r = row.getBoundingClientRect(), w = tipBox.offsetWidth, h = tipBox.offsetHeight, gap = 12;
+      let x = r.right + gap;
+      if (x + w > window.innerWidth - 8) x = Math.max(8, r.left - w - gap);       // no room on the right: left side
+      const y = Math.min(Math.max(8, r.top), window.innerHeight - h - 8);
+      tipBox.style.left = x + 'px'; tipBox.style.top = Math.max(8, y) + 'px';
+    }
+    function hideTip() { clearTimeout(tipTimer); tipRow = null; tipBox.classList.add('d-none'); }
+    document.addEventListener('mouseover', (e) => {
+      const row = e.target.closest('[data-tip-item]');
+      if (row === tipRow) return;
+      hideTip();
+      if (!row) return;
+      tipRow = row;
+      tipTimer = setTimeout(async () => {
+        const id = +row.dataset.tipItem;
+        if (!tipCache.has(id)) tipCache.set(id, AA.api('GET', '/api/db/items/' + id).catch(() => null));
+        const it = await tipCache.get(id);
+        if (tipRow !== row || !it) return;
+        tipBox.innerHTML = itemInfo(it);
+        tipBox.classList.remove('d-none');
+        placeTip(row);
+      }, 1000);
+    });
+    window.addEventListener('scroll', hideTip, true);
+
     function itemRaw(it) {
       return `<div class="table-responsive"><table class="table table-sm aa-db-table aa-db-raw"><tbody>
         ${Object.entries(it.f).map(([k, v]) => `<tr><td class="aa-mono text-muted">${AA.esc(k)}</td><td class="aa-mono" data-no-i18n>${AA.esc(v)}</td></tr>`).join('')}
@@ -773,7 +805,7 @@
           <thead><tr><th style="width:52px"></th><th>${AA.t('物品')}</th><th style="width:50px">${AA.t('等级')}</th><th>${AA.t('来源')}</th>
             <th style="width:86px" title="${AA.t('掉落系数 100 时，击杀一次得到这件的概率（合并所有来源）')}">${AA.t('概率')}</th>
             <th style="width:86px" title="${AA.t('平均要击杀多少次才能得到一件')}">${AA.t('平均击杀')}</th></tr></thead>
-          <tbody>${n.expect.map((it) => `<tr>
+          <tbody>${n.expect.map((it) => `<tr${it.id ? ` data-tip-item="${it.id}"` : ''}>
             <td>${iconBox(it.q, it.ic)}</td>
             <td data-no-i18n class="text-nowrap"><span class="aa-quality-${AA.esc(it.q)}">${AA.esc(it.id ? nameOf(it) : it.k)}</span><div class="text-muted small aa-mono">${it.id || AA.esc(it.k)}</div></td>
             <td>${it.lv || ''}</td><td class="small" data-no-i18n>${src(it)}</td>
@@ -791,7 +823,7 @@
         <div class="table-responsive mb-3"><table class="table table-sm aa-db-table">
           <thead><tr><th style="width:52px"></th><th>${AA.t('物品')}</th><th style="width:50px">${AA.t('等级')}</th>
             <th style="width:60px">${AA.t('数量')}</th><th style="width:86px">${AA.t('概率')}</th></tr></thead>
-          <tbody>${n.drops.map((it) => `<tr>
+          <tbody>${n.drops.map((it) => `<tr${it.id ? ` data-tip-item="${it.id}"` : ''}>
             <td>${iconBox(it.q, it.ic)}</td>
             <td data-no-i18n class="text-nowrap"><span class="aa-quality-${AA.esc(it.q)}">${AA.esc(it.id ? nameOf(it) : it.k)}</span><div class="text-muted small aa-mono">${it.id || AA.esc(it.k)}</div></td>
             <td>${it.lv || ''}</td><td>${it.count}</td><td class="aa-mono">${pct(it.chance)}</td></tr>`).join('')}</tbody>
@@ -930,7 +962,7 @@
         document.getElementById('gd-head').innerHTML = `<tr><th style="width:52px"></th><th>${AA.t('物品')}</th><th style="width:50px">${AA.t('等级')}</th>
           <th style="width:86px" title="${AA.t('掉落系数 100 时，每掷一次出这件的概率')}">${AA.t('每次概率')}</th><th style="width:76px">${AA.t('组内占比')}</th></tr>`;
         document.getElementById('gd-body').innerHTML = view.map((it) => `
-          <tr class="${hit(it) ? 'table-warning' : ''}">
+          <tr class="${hit(it) ? 'table-warning' : ''}"${it.id ? ` data-tip-item="${it.id}"` : ''}>
             <td><span class="aa-db-icon aa-db-icon-${AA.esc(it.q)}">${it.ic ? `<img src="icons/item/${encodeURIComponent(it.ic)}.png" alt="" loading="lazy" onerror="this.remove()">` : ''}</span></td>
             <td data-no-i18n class="text-nowrap"><span class="aa-quality-${AA.esc(it.q)}">${AA.esc(nameOf(it))}</span><div class="text-muted small aa-mono">${it.id || ''}</div></td>
             <td>${it.lv || ''}</td><td class="aa-mono">${pct(it.weight)}</td>

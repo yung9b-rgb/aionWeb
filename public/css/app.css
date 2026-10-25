@@ -167,3 +167,7 @@ select.form-control, .dataTables_wrapper select { color: #212529 !important; }
 .aa-tip .aa-grade-normal { color: #b4bac6; }
 .aa-tip .aa-grade-elite { color: #4fd18b; }
 .aa-tip .aa-grade-hero { color: #5aa2ff; }
+
+/* floating item card on hover (NPC / drop-group tables) */
+.aa-itip { position: fixed; z-index: 2000; pointer-events: none; max-width: calc(100vw - 16px); box-shadow: 0 6px 24px rgba(0,0,0,.35); border-radius: 6px; }
+.aa-itip .aa-tip { max-width: 460px; }
