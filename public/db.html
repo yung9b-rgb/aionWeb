@@ -33,7 +33,53 @@
               <div class="card">
                 <div class="card-body">
                   <nav aria-label="breadcrumb"><ol class="breadcrumb aa-db-crumb mb-3" id="crumb"></ol></nav>
-                  <div id="db-body"></div>
+                  <div id="db-empty" class="text-muted d-none">这个模块还没开发。</div>
+                  <div id="db-items">
+                    <div class="aa-db-filter">
+                      <div class="aa-db-frow">
+                        <label>等级</label>
+                        <input type="number" class="form-control form-control-sm" id="f-lv-min" min="1" max="99">
+                        <span>~</span>
+                        <input type="number" class="form-control form-control-sm" id="f-lv-max" min="1" max="99">
+                        <label class="ms-4">魔石孔</label>
+                        <input type="number" class="form-control form-control-sm" id="f-slot-min" min="0" max="6">
+                        <span>~</span>
+                        <input type="number" class="form-control form-control-sm" id="f-slot-max" min="0" max="6">
+                      </div>
+                      <div class="aa-db-frow">
+                        <label>种族</label>
+                        <button type="button" class="aa-db-race light" data-race="0" title="天族"><i class="mdi mdi-weather-sunny"></i> 天族</button>
+                        <button type="button" class="aa-db-race dark" data-race="1" title="魔族"><i class="mdi mdi-weather-night"></i> 魔族</button>
+                      </div>
+                      <div class="aa-db-frow" id="f-quality"></div>
+                      <div class="aa-db-fhead">附加属性</div>
+                      <div class="aa-db-stats" id="f-stats"></div>
+                    </div>
+                    <div class="aa-db-bar">
+                      <div class="d-flex align-items-center gap-2">
+                        <span>显示</span>
+                        <select class="form-control form-control-sm" id="f-size" style="width:auto">
+                          <option>25</option><option>50</option><option selected>100</option><option>200</option>
+                        </select>
+                        <span>项结果</span>
+                        <button class="btn btn-sm btn-outline-secondary ms-2" id="btn-reset"><i class="mdi mdi-restore"></i> 重置筛选</button>
+                      </div>
+                      <div class="d-flex align-items-center gap-2">
+                        <span>搜索：</span>
+                        <input type="text" class="form-control form-control-sm" id="f-q" placeholder="名称或 ID" style="width:220px">
+                      </div>
+                    </div>
+                    <div class="aa-db-bar">
+                      <span class="text-muted" id="f-summary"></span>
+                      <nav><ul class="pagination pagination-sm mb-0" id="f-pager"></ul></nav>
+                    </div>
+                    <div class="table-responsive">
+                      <table class="table table-hover aa-db-table">
+                        <thead id="t-head"></thead>
+                        <tbody id="t-body"></tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -114,6 +160,53 @@
       setTimeout(() => m.classList.remove('aa-dbmenu-closed'), 300);
     });
 
+    // Item filter panel (layout first; the data source is not wired yet).
+    const QUALITIES = [['common', '普通'], ['rare', '稀有'], ['legend', '传颂'], ['unique', '唯一'], ['epic', '英雄']];
+    const STATS = ['物理攻击力', '魔法增幅力', '命中', '魔法命中', '物理致命一击', '魔法致命一击', '攻击速度', '施法速度',
+      '最大生命力', '最大精神力', '最大飞行时间', '物理防御力', '魔法抵抗', '回避', '格挡', '招架', '集中',
+      '物理致命一击抵抗', '魔法致命一击抵抗', '盾牌防御', '武器防御', '对人攻击力', '对人防御力', '治愈量增加',
+      '火属性防御', '水属性防御', '地属性防御', '风属性防御', '移动速度', '飞行速度', '敌对值增加率',
+      '眩晕抵抗', '沉默抵抗', '麻痹抵抗', '束缚抵抗', '睡眠抵抗'];
+    const state = { races: new Set(), qualities: new Set(), stats: new Set(), cols: ['', '', ''] };
+
+    document.getElementById('f-quality').innerHTML = `<label>${AA.t('品质')}</label>` + QUALITIES.map(([k, t]) =>
+      `<label class="aa-db-q aa-quality-${k}"><input type="checkbox" value="${k}"> ${AA.t(t)}</label>`).join('');
+    document.getElementById('f-stats').innerHTML = STATS.map((s) => `<button type="button" data-stat="${AA.esc(s)}">${AA.esc(AA.t(s))}</button>`).join('');
+
+    function headHtml() {
+      const opt = (v) => `<option value="">${AA.t('统计')}</option>` + STATS.map((s) => `<option value="${AA.esc(s)}"${s === v ? ' selected' : ''}>${AA.esc(AA.t(s))}</option>`).join('');
+      return `<tr><th style="width:110px">ID</th><th style="width:56px"></th><th>${AA.t('物品名称')}</th><th style="width:80px">${AA.t('等级')}</th>
+        <th style="width:80px">${AA.t('魔石孔')}</th>${state.cols.map((v, i) => `<th style="width:170px"><select class="form-control form-control-sm" data-col="${i}">${opt(v)}</select></th>`).join('')}</tr>`;
+    }
+
+    function renderItems(route) {
+      document.getElementById('t-head').innerHTML = headHtml();
+      document.getElementById('t-body').innerHTML = `<tr><td colspan="8" class="text-muted text-center py-4">${AA.t('物品数据还没接入（分类 {0}）', AA.esc(route))}</td></tr>`;
+      document.getElementById('f-summary').textContent = AA.t('共 {0} 项', 0);
+      document.getElementById('f-pager').innerHTML = `<li class="page-item disabled"><a class="page-link">${AA.t('上一页')}</a></li>
+        <li class="page-item active"><a class="page-link">1</a></li><li class="page-item disabled"><a class="page-link">${AA.t('下一页')}</a></li>`;
+    }
+
+    const toggle = (set, v) => { set.has(v) ? set.delete(v) : set.add(v); };
+    document.querySelectorAll('.aa-db-race').forEach((b) => b.addEventListener('click', () => {
+      b.classList.toggle('on'); toggle(state.races, b.dataset.race);
+    }));
+    document.getElementById('f-quality').addEventListener('change', (e) => toggle(state.qualities, e.target.value));
+    document.getElementById('f-stats').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-stat]'); if (!b) return;
+      b.classList.toggle('on'); toggle(state.stats, b.dataset.stat);
+    });
+    document.getElementById('t-head').addEventListener('change', (e) => {
+      const s = e.target.closest('[data-col]'); if (s) state.cols[+s.dataset.col] = s.value;
+    });
+    document.getElementById('btn-reset').addEventListener('click', () => {
+      ['f-lv-min', 'f-lv-max', 'f-slot-min', 'f-slot-max', 'f-q'].forEach((id) => { document.getElementById(id).value = ''; });
+      document.querySelectorAll('#db-items .on').forEach((x) => x.classList.remove('on'));
+      document.querySelectorAll('#f-quality input').forEach((x) => { x.checked = false; });
+      state.races.clear(); state.qualities.clear(); state.stats.clear(); state.cols = ['', '', ''];
+      document.getElementById('t-head').innerHTML = headHtml();
+    });
+
     function render() {
       const route = decodeURIComponent(location.hash.slice(1)) || 'item';
       const path = resolve(route);
@@ -125,24 +218,10 @@
           ? `<li class="breadcrumb-item active">${AA.esc(AA.t(title))}</li>`
           : `<li class="breadcrumb-item"><a href="#${acc}">${AA.esc(AA.t(title))}</a></li>`;
       }).join('');
-      const node = path[path.length - 1];
-      const body = document.getElementById('db-body');
-      if (!node) { body.innerHTML = ''; return; }
-      if (!node[2] && path.length === 1) {
-        body.innerHTML = `<p class="text-muted mb-0">${AA.t('这个模块还没开发。')}</p>`;
-        return;
-      }
-      const kids = (node[2] || []).filter((n) => n !== '-');
-      const chips = kids.length
-        ? `<div class="aa-db-chips mb-3">${kids.map(([k, t]) => `<a class="btn btn-sm btn-outline-primary" href="#${route}/${k}">${AA.esc(AA.t(t))}</a>`).join('')}</div>`
-        : '';
-      body.innerHTML = `${chips}
-        <div class="table-responsive">
-          <table class="table table-sm table-hover">
-            <thead><tr><th>ID</th><th>${AA.t('名称')}</th><th>${AA.t('等级')}</th><th>${AA.t('品质')}</th><th>${AA.t('说明')}</th></tr></thead>
-            <tbody><tr><td colspan="5" class="text-muted">${AA.t('数据表格（待开发）：{0}', AA.esc(route))}</td></tr></tbody>
-          </table>
-        </div>`;
+      const isItem = path[0] && path[0][0] === 'item';
+      document.getElementById('db-items').classList.toggle('d-none', !isItem);
+      document.getElementById('db-empty').classList.toggle('d-none', isItem);
+      if (isItem) renderItems(path.map((n) => n[0]).join('/'));
     }
     window.addEventListener('hashchange', render);
     render();
