@@ -45,6 +45,30 @@ def tag(blk, k):
     return m.group(1).strip() if m else ''
 
 
+def flatten(blk):
+    """Leaf elements of an NPC record as [path, value] in file order; list entries (<data>) are numbered from 1,
+    e.g. skills.data[2].skill_name."""
+    out, path, seen = [], [], [{}]
+    toks = list(re.finditer(r'<(/?)([A-Za-z_][\w.-]*)\s*>([^<]*)', blk))
+    i = 0
+    while i < len(toks):
+        close, name, text = toks[i].group(1), toks[i].group(2), toks[i].group(3)
+        if close:
+            if path: path.pop(); seen.pop()
+            i += 1
+            continue
+        n = seen[-1][name] = seen[-1].get(name, 0) + 1
+        label = f'{name}[{n}]' if name == 'data' or n > 1 else name
+        nxt = toks[i + 1] if i + 1 < len(toks) else None
+        if nxt and nxt.group(1) and nxt.group(2) == name:            # <a>text</a>: a leaf
+            out.append(['.'.join(path + [label]), text.strip()])
+            i += 2
+            continue
+        path.append(label); seen.append({})
+        i += 1
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--npcs', required=True, help='server npcs.xml (the one the servers load)')
@@ -55,6 +79,8 @@ def main():
     ap.add_argument('--en', help='English client strings')
     ap.add_argument('--items', default=os.path.join(HERE, '..', 'data', 'db_items.json'), help='data/db_items.json')
     ap.add_argument('--out', default=os.path.join(HERE, '..', 'data', 'db_npcs.json'))
+    ap.add_argument('--raw-out', default=os.path.join(HERE, '..', 'data', 'db_npcs_raw.ndjson'),
+                    help='every field of every NPC plus its drop lists, one JSON per line (the NPC detail page)')
     a = ap.parse_args()
     if not os.path.exists(a.items):
         sys.exit(f'{a.items}: run tools/build_db_items.py first')
@@ -83,8 +109,23 @@ def main():
 
     npcs = []
     text = decode(open(a.npcs, 'rb').read())
+    raw_tmp = a.raw_out + '.tmp'
+    os.makedirs(os.path.dirname(os.path.abspath(a.raw_out)), exist_ok=True)
+    raw = open(raw_tmp, 'w', encoding='utf-8', newline='\n')
     for m in re.finditer(r'<npc>\s*<id>(\d+)</id>(.*?)</npc>', text, re.S):
         blk = m.group(2)
+        # detail page: all fields + drops (direct items: name, count, prob, drop group idx; groups: name, adjustment, idx)
+        jj = blk.find('<items_info>')
+        info = blk[jj:blk.find('</items_info>', jj)] if jj >= 0 else ''
+        d_items = [[tag(x, 'item'), int(tag(x, 'item_count') or 1), int(tag(x, 'prob') or 0), tag(x, 'drop_group_idx')]
+                   for x in re.findall(r'<data>(.*?)</data>', info[info.find('<items>'):info.find('</items>')] if '<items>' in info else '', re.S)
+                   if tag(x, 'item')]
+        c_groups = [[tag(x, 'common_drop'), int(tag(x, 'common_drop_adjustment') or 0), tag(x, 'common_drop_group_idx')]
+                    for x in re.findall(r'<data>(.*?)</data>', info[info.find('<common_drops>'):] if '<common_drops>' in info else '', re.S)
+                    if tag(x, 'common_drop')]
+        cash = [int(tag(info, 'min_cash_amount') or 0), int(tag(info, 'max_cash_amount') or 0), int(tag(info, 'cash_drop_prob') or 0)]
+        raw.write(json.dumps(dict(id=int(m.group(1)), f=[['id', m.group(1)]] + flatten(blk), d=d_items, cd=c_groups, cash=cash),
+                             ensure_ascii=False, separators=(',', ':')) + '\n')
         k = tag(blk, 'name')
         desc = tag(blk, 'desc').upper()
         title = tag(blk, 'npc_title').upper()
@@ -179,6 +220,8 @@ def main():
                               n=len(e['ids']), lvMin=lv[0], lvMax=lv[-1], lv=lv[len(lv) // 2]))
     instances.sort(key=lambda e: (e['lv'], e['zh']))
 
+    raw.close()
+    os.replace(raw_tmp, a.raw_out)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     tmp = a.out + '.tmp'
     with open(tmp, 'w', encoding='utf-8') as fp:

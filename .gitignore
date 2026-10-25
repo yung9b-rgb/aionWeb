@@ -11,6 +11,7 @@ data/db_items.json
 data/db_items_raw.ndjson
 data/db_dropgroups.json
 data/db_npcs.json
+data/db_npcs_raw.ndjson
 public/icons/
 
 # runtime logs

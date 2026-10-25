@@ -67,16 +67,17 @@ export function queryItems(q: ItemQuery) {
   };
 }
 
-// Full field list per item: data/db_items_raw.ndjson (one JSON object per line, written by build_db_items.py).
-// Only a byte-offset index is kept in memory; each detail request reads its one line.
+// Full field lists: data/db_items_raw.ndjson / db_npcs_raw.ndjson (one JSON object per line, written by the
+// build_db_*.py tools). Only a byte-offset index per file is kept in memory; each detail request reads its one line.
 const RAW_FILE = path.join(ROOT, 'data', 'db_items_raw.ndjson');
-let rawIndex: { mtime: number; at: Map<number, [number, number]> } | null = null;
+const rawIndexes = new Map<string, { mtime: number; at: Map<number, [number, number]> }>();
 
-function rawLine(id: number): any | null {
-  if (!fs.existsSync(RAW_FILE)) return null;
-  const mtime = fs.statSync(RAW_FILE).mtimeMs;
+function rawLine(id: number, file = RAW_FILE): any | null {
+  if (!fs.existsSync(file)) return null;
+  const mtime = fs.statSync(file).mtimeMs;
+  let rawIndex = rawIndexes.get(file);
   if (!rawIndex || rawIndex.mtime !== mtime) {
-    const buf = fs.readFileSync(RAW_FILE);
+    const buf = fs.readFileSync(file);
     const at = new Map<number, [number, number]>();
     for (let pos = 0; pos < buf.length;) {
       let end = buf.indexOf(10, pos);
@@ -86,10 +87,11 @@ function rawLine(id: number): any | null {
       pos = end + 1;
     }
     rawIndex = { mtime, at };
+    rawIndexes.set(file, rawIndex);
   }
   const loc = rawIndex.at.get(id);
   if (!loc) return null;
-  const fd = fs.openSync(RAW_FILE, 'r');
+  const fd = fs.openSync(file, 'r');
   try {
     const b = Buffer.alloc(loc[1]);
     fs.readSync(fd, b, 0, loc[1], loc[0]);
@@ -297,8 +299,35 @@ export function npcInstances() {
   return loadNpcs().instances.map(({ key, zh, en, n, lvMin, lvMax, lv }) => ({ key, zh, en, n, lvMin, lvMax, lv }));
 }
 
+// internal item name / group name -> record, rebuilt when the source file is reloaded
+let itemsByKey: { src: object; map: Map<string, DbItem> } | null = null;
+let groupsByName: { src: object; map: Map<string, DropGroup> } | null = null;
+
 export function getNpc(id: number) {
   const { byId, maps } = loadNpcs();
   const n = byId.get(id);
-  return n ? { ...n, grade: npcGrade(n.g), mapNames: Object.fromEntries((n.maps ?? []).map((w) => [w, maps[w] ?? [w, w]])) } : null;
+  if (!n) return null;
+  // every npcs.xml field ([path, value] in file order) and the drop lists, from db_npcs_raw.ndjson
+  const raw = rawLine(id, path.join(ROOT, 'data', 'db_npcs_raw.ndjson'));
+  const ic = load();
+  if (!itemsByKey || itemsByKey.src !== ic) itemsByKey = { src: ic, map: new Map(ic.items.map((x) => [x.k.toLowerCase(), x])) };
+  const item = (k: string) => {
+    const it = itemsByKey!.map.get(k.toLowerCase());
+    return { k, id: it?.id ?? 0, zh: it?.zh ?? '', en: it?.en ?? '', lv: it?.lv ?? 0, q: it?.q ?? '', ic: it?.ic };
+  };
+  const gc = fs.existsSync(GROUPS_FILE) ? loadGroups() : null;
+  if (gc && (!groupsByName || groupsByName.src !== gc)) groupsByName = { src: gc, map: new Map(gc.groups.map((g) => [g.name.toLowerCase(), g])) };
+  return {
+    ...n, grade: npcGrade(n.g), mapNames: Object.fromEntries((n.maps ?? []).map((w) => [w, maps[w] ?? [w, w]])),
+    f: raw?.f ?? [], cash: raw?.cash ?? [0, 0, 0],
+    // direct items: each rolled on its own, chance min(prob, 70%) per kill at drop rate 100
+    drops: (raw?.d ?? []).map(([k, count, prob, idx]: [string, number, number, string]) =>
+      ({ ...item(k), count, prob, chance: Math.min(prob, 7e6), idx })),
+    // common groups: one roll each, at most one item; chance = group total x adjustment / 100 (adjustment <= 0: not rolled)
+    groups: (raw?.cd ?? []).map(([name, adj, idx]: [string, number, string]) => {
+      const g = groupsByName?.map.get(name.toLowerCase());
+      const total = g ? g.items.reduce((s, [, w]) => s + w, 0) : 0;
+      return { id: g?.id ?? 0, name, adj, idx, items: g?.items.length ?? 0, chance: adj > 0 ? Math.min(total * adj / 100, 1e7) : 0 };
+    }),
+  };
 }

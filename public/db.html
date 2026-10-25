@@ -708,6 +708,7 @@
         return;
       }
       if (seq !== nseq || nstate.selected !== id || pageKind !== 'npc') return;
+      nst.n = n;
       const title = npcTitle(n);
       const maps = [...new Set((n.maps || []).map((w) => (AA.lang === 'en' ? n.mapNames[w][1] : n.mapNames[w][0]) || w))];
       box.innerHTML = `<div class="aa-tip aa-tip-npc">
@@ -725,8 +726,68 @@
         ]))}
         ${sec('出现地图', maps.length ? `<div data-no-i18n>${maps.map(AA.esc).join('、')}</div>`
           : `<div class="aa-tip-dim">${AA.t(n.ai ? '由其他 NPC 的 AI 召唤' : '没有刷新点（可能由任务、事件或脚本生成）')}</div>`)}
-      </div>`;
+      </div>
+      <ul class="nav nav-tabs aa-db-tabs mt-4 mb-3">
+        <li class="nav-item"><a class="nav-link" href="#" data-ntab="drops">${AA.t('掉落组')} <span class="badge bg-light text-dark">${n.drops.length + n.groups.filter((g) => g.adj > 0).length}</span></a></li>
+        <li class="nav-item"><a class="nav-link" href="#" data-ntab="raw">${AA.t('原始数据')} <span class="badge bg-light text-dark">${n.f.length}</span></a></li>
+      </ul>
+      <div id="nt-body"></div>`;
+      renderNpcTab();
     }
+
+    // tabs under the NPC card; the chosen tab is kept while browsing NPCs
+    const nst = { n: null, tab: 'drops' };
+    function renderNpcTab() {
+      const n = nst.n; if (!n) return;
+      document.querySelectorAll('#db-detail [data-ntab]').forEach((a) => a.classList.toggle('active', a.dataset.ntab === nst.tab));
+      document.getElementById('nt-body').innerHTML = nst.tab === 'raw' ? npcRaw(n) : npcDrops(n);
+    }
+
+    function npcDrops(n) {
+      const [cmin, cmax, cprob] = n.cash;
+      const cash = cprob > 0 && cmax > 0
+        ? `<p class="mb-3">${AA.t('基纳')}：<b>${AA.fmtNum(cmin)} ~ ${AA.fmtNum(cmax)}</b> <span class="text-muted">（${AA.t('概率')} ${pct(Math.min(cprob, 1e7))}）</span></p>` : '';
+      const direct = n.drops.length ? `
+        <h6 class="mb-2">${AA.t('直接掉落')} <span class="text-muted small">${AA.t('每件各自掷一次')}</span></h6>
+        <div class="table-responsive mb-3"><table class="table table-sm aa-db-table">
+          <thead><tr><th style="width:52px"></th><th>${AA.t('物品')}</th><th style="width:50px">${AA.t('等级')}</th>
+            <th style="width:60px">${AA.t('数量')}</th><th style="width:86px">${AA.t('概率')}</th></tr></thead>
+          <tbody>${n.drops.map((it) => `<tr>
+            <td>${iconBox(it.q, it.ic)}</td>
+            <td data-no-i18n class="text-nowrap"><span class="aa-quality-${AA.esc(it.q)}">${AA.esc(it.id ? nameOf(it) : it.k)}</span><div class="text-muted small aa-mono">${it.id || AA.esc(it.k)}</div></td>
+            <td>${it.lv || ''}</td><td>${it.count}</td><td class="aa-mono">${pct(it.chance)}</td></tr>`).join('')}</tbody>
+        </table></div>` : '';
+      const groups = n.groups.length ? `
+        <h6 class="mb-2">${AA.t('掉落组')} <span class="text-muted small">${AA.t('每组掷一次，最多出组里的一件；点一行打开这个组')}</span></h6>
+        <div class="table-responsive"><table class="table table-sm aa-db-table">
+          <thead><tr><th style="width:70px">ID</th><th>${AA.t('掉落组')}</th><th style="width:60px">${AA.t('物品数')}</th>
+            <th style="width:76px" title="${AA.t('npcs.xml 的 common_drop_adjustment，100 = 原值')}">${AA.t('掉落系数')}</th>
+            <th style="width:86px" title="${AA.t('击杀一次，这个组出一件的概率')}">${AA.t('本组概率')}</th></tr></thead>
+          <tbody>${n.groups.map((g) => `<tr class="${g.id ? 'aa-db-row' : ''}${g.adj > 0 ? '' : ' text-muted'}"${g.id ? ` data-gopen="${g.id}"` : ''}>
+            <td class="aa-mono">${g.id || ''}</td><td class="aa-mono" data-no-i18n>${AA.esc(g.name)}</td><td>${g.items}</td>
+            <td class="aa-mono">${g.adj}</td><td class="aa-mono">${g.adj > 0 ? pct(g.chance) : AA.t('不掉落')}</td></tr>`).join('')}</tbody>
+        </table></div>` : '';
+      return cash + direct + groups || `<p class="text-muted">${AA.t('这个 NPC 没有掉落。')}</p>`;
+    }
+
+    function npcRaw(n) {
+      return `<div class="table-responsive"><table class="table table-sm aa-db-table aa-db-raw"><tbody>
+        ${n.f.map(([k, v]) => `<tr><td class="aa-mono text-muted">${AA.esc(k)}</td><td class="aa-mono" data-no-i18n>${AA.esc(v)}</td></tr>`).join('')}
+      </tbody></table></div>
+      <p class="text-muted small mb-0">${AA.t('服务端 npcs.xml 里这个 NPC 的全部字段，按文件中的顺序；data[n] 是列表里的第 n 项。')}</p>`;
+    }
+
+    document.getElementById('db-detail').addEventListener('click', (e) => {
+      if (pageKind !== 'npc' || !nst.n) return;
+      const t = e.target.closest('[data-ntab]');
+      if (t) { e.preventDefault(); nst.tab = t.dataset.ntab; renderNpcTab(); return; }
+      const row = e.target.closest('[data-gopen]');
+      if (row) {                              // open the group on the 掉落组 page, listed by its id
+        gstate.open = +row.dataset.gopen;
+        document.getElementById('g-q').value = row.dataset.gopen;
+        location.hash = '#item/dropgroup';
+      }
+    });
 
     // ---- 掉落组 ----
     const gstate = { page: 1, sort: 'id', desc: false, seq: 0, selected: 0, active: false, open: 0 };
