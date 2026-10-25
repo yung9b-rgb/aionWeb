@@ -42,7 +42,7 @@ STAT_LABEL = {
     'magicalhitaccuracy': '魔法命中', 'critical': '物理致命一击', 'magicalcritical': '魔法致命一击', 'attackdelay': '攻击速度',
     'boostcastingtime': '施法速度', 'maxhp': '最大生命力', 'maxmp': '最大精神力', 'maxfp': '最大飞行时间',
     'physicaldefend': '物理防御力', 'magicalresist': '魔法抵抗', 'magical_resist': '魔法抵抗', 'dodge': '回避', 'block': '格挡',
-    'parry': '招架', 'concentration': '集中', 'healskillboost': '治愈量增加', 'speed': '移动速度', 'flyspeed': '飞行速度',
+    'parry': '武器防御', 'concentration': '集中', 'healskillboost': '治愈量增加', 'speed': '移动速度', 'flyspeed': '飞行速度',
     'boosthate': '敌对值增加率', 'elementaldefendfire': '火属性防御', 'elementaldefendwater': '水属性防御',
     'elementaldefendearth': '地属性防御', 'elementaldefendair': '风属性防御', 'arstun': '眩晕抵抗', 'arsilence': '沉默抵抗',
     'arparalyze': '麻痹抵抗', 'arroot': '束缚抵抗', 'arsleep': '睡眠抵抗', 'arsnare': '减速抵抗', 'arslow': '迟缓抵抗',
