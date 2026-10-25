@@ -8,6 +8,7 @@ import { dbTarget, pool as gamePool } from './db.ts';
 import { announce } from './cached.ts';
 import { serviceStatus, summary, listCharacters, getCharacter, sendMail, validateMailItems, listAccounts, findCashMail } from './game.ts';
 import { loadItems, tryLoadItems, itemsCacheExists, searchItems } from './items.ts';
+import { queryItems, getItem } from './dbstatic.ts';
 import { GmProxy } from './gmproxy.ts';
 import { ShopServer } from './shopserver.ts';
 import { ShopAgentServer } from './shopagent.ts';
@@ -173,6 +174,23 @@ route('GET', '/api/items/info', async (_req, url) => {
     const it = db.get(id);
     return [id, it ? { zh: it.zh || it.name, en: it.en || it.name, name: it.name, max_stack: it.max_stack, quality: it.quality, level: it.level } : null];
   }));
+});
+
+// ---- 静态数据库 ----
+const num = (v: string | null) => (v === null || v.trim() === '' || !Number.isFinite(Number(v)) ? undefined : Number(v));
+const list = (v: string | null) => (v ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+route('GET', '/api/db/items', async (_req, url) => {
+  const p = url.searchParams;
+  return queryItems({
+    cat: (p.get('cat') ?? '').replace(/^item\/?/, ''), lvMin: num(p.get('lvMin')), lvMax: num(p.get('lvMax')),
+    races: list(p.get('race')).map(Number).filter((x) => x === 0 || x === 1), qualities: list(p.get('q')), stats: list(p.get('stats')),
+    search: p.get('search') ?? '', hidden: p.get('hidden') === '1', page: num(p.get('page')) ?? 1, size: num(p.get('size')) ?? 100,
+  });
+});
+route('GET', '/api/db/items/(\\d+)', async (_req, _url, m) => {
+  const it = getItem(Number(m[1]));
+  if (!it) throw new HttpError(404, L('物品不存在', 'Item not found'));
+  return it;
 });
 
 route('POST', '/api/mail/preview', async (req) => {

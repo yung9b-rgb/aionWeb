@@ -93,3 +93,11 @@ select.form-control, .dataTables_wrapper select { color: #212529 !important; }
 .aa-db-detail { display: flex; flex-direction: column; min-height: 420px; }
 .aa-db-detail-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #a3a9b6; gap: 8px; }
 .aa-db-detail-empty .mdi { font-size: 2.4rem; }
+.aa-db-row { cursor: pointer; }
+.aa-db-icon { display: inline-block; width: 32px; height: 32px; border-radius: 4px; background: #eef0f5; border: 2px solid #d6dae6; vertical-align: middle; }
+.aa-db-icon-rare { border-color: #19a974; }
+.aa-db-icon-legend { border-color: #2a7be4; }
+.aa-db-icon-unique { border-color: #e0a100; }
+.aa-db-icon-epic { border-color: #d06b00; }
+.aa-db-icon-mythic { border-color: #a42fd8; }
+.aa-quality-junk { color: #a3a9b6; }

@@ -7,6 +7,7 @@ data/secrets.json
 
 # game data: generated per install by tools/build_items_cache.py, never committed
 data/items_cache.json
+data/db_items.json
 
 # runtime logs
 data/proxy_logs/
@@ -18,6 +19,7 @@ data/points_log.jsonl
 data/shop_orders.json
 
 *.tmp
+__pycache__/
 
 # OS junk
 .DS_Store

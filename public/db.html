@@ -165,41 +165,102 @@
       setTimeout(() => m.classList.remove('aa-dbmenu-closed'), 300);
     });
 
-    // Item filter panel (layout first; the data source is not wired yet).
+    // Item list: filters -> /api/db/items (server-side filter + paging). 附加属性 tags come from the category's items.
     const QUALITIES = [['common', '普通'], ['rare', '稀有'], ['legend', '传颂'], ['unique', '唯一'], ['epic', '英雄']];
-    const STATS = ['物理攻击力', '魔法增幅力', '命中', '魔法命中', '物理致命一击', '魔法致命一击', '攻击速度', '施法速度',
-      '最大生命力', '最大精神力', '最大飞行时间', '物理防御力', '魔法抵抗', '回避', '格挡', '招架', '集中',
-      '物理致命一击抵抗', '魔法致命一击抵抗', '盾牌防御', '武器防御', '对人攻击力', '对人防御力', '治愈量增加',
-      '火属性防御', '水属性防御', '地属性防御', '风属性防御', '移动速度', '飞行速度', '敌对值增加率',
-      '眩晕抵抗', '沉默抵抗', '麻痹抵抗', '束缚抵抗', '睡眠抵抗'];
-    const state = { races: new Set(), qualities: new Set(), stats: new Set() };
+    const state = { cat: '', page: 1, races: new Set(), qualities: new Set(), stats: new Set(), statList: [], seq: 0, selected: 0 };
 
     document.getElementById('f-quality').innerHTML = `<label>${AA.t('品质')}</label>` + QUALITIES.map(([k, t]) =>
       `<label class="aa-db-q aa-quality-${k}"><input type="checkbox" value="${k}"> ${AA.t(t)}</label>`).join('');
-    document.getElementById('f-stats').innerHTML = STATS.map((s) => `<button type="button" data-stat="${AA.esc(s)}">${AA.esc(AA.t(s))}</button>`).join('');
+    document.getElementById('t-head').innerHTML = `<tr><th style="width:100px">ID</th><th style="width:52px"></th>
+      <th>${AA.t('物品名称')}</th><th style="width:64px">${AA.t('等级')}</th></tr>`;
 
-    function headHtml() {
-      return `<tr><th style="width:100px">ID</th><th style="width:52px"></th><th>${AA.t('物品名称')}</th><th style="width:64px">${AA.t('等级')}</th>
-        </tr>`;
+    const nameOf = (r) => (AA.lang === 'en' ? (r.en || r.k) : (r.zh || r.k));
+    const val = (id) => document.getElementById(id).value.trim();
+
+    function renderStats() {
+      document.getElementById('f-stats').innerHTML = state.statList.length
+        ? state.statList.map((s) => `<button type="button" data-stat="${AA.esc(s.key)}" class="${state.stats.has(s.key) ? 'on' : ''}" title="${s.n}">${AA.esc(AA.t(s.label))}</button>`).join('')
+        : `<span class="text-muted small">${AA.t('这个分类没有附加属性')}</span>`;
+      statsCount();
     }
 
+    function renderPager(page, pages) {
+      const nums = [];
+      for (let n = Math.max(1, page - 2); n <= Math.min(pages, page + 2); n++) nums.push(n);
+      const li = (n, label, dis, act) => `<li class="page-item${dis ? ' disabled' : ''}${act ? ' active' : ''}"><a class="page-link" href="#" data-page="${n}">${label}</a></li>`;
+      document.getElementById('f-pager').innerHTML = li(page - 1, AA.t('上一页'), page <= 1)
+        + (nums[0] > 1 ? li(1, '1') + (nums[0] > 2 ? li(0, '…', true) : '') : '')
+        + nums.map((n) => li(n, n, false, n === page)).join('')
+        + (nums[nums.length - 1] < pages ? (nums[nums.length - 1] < pages - 1 ? li(0, '…', true) : '') + li(pages, pages) : '')
+        + li(page + 1, AA.t('下一页'), page >= pages);
+    }
+
+    async function load() {
+      const q = new URLSearchParams({ cat: state.cat, page: state.page, size: val('f-size') });
+      if (val('f-lv-min')) q.set('lvMin', val('f-lv-min'));
+      if (val('f-lv-max')) q.set('lvMax', val('f-lv-max'));
+      if (state.races.size) q.set('race', [...state.races].join(','));
+      if (state.qualities.size) q.set('q', [...state.qualities].join(','));
+      if (state.stats.size) q.set('stats', [...state.stats].join(','));
+      if (val('f-q')) q.set('search', val('f-q'));
+      const seq = ++state.seq;
+      const body = document.getElementById('t-body');
+      let d;
+      try { d = await AA.api('GET', '/api/db/items?' + q); } catch (e) {
+        if (seq === state.seq) body.innerHTML = `<tr><td colspan="4" class="text-danger text-center py-4">${AA.esc(e.message)}</td></tr>`;
+        return;
+      }
+      if (seq !== state.seq) return;          // a newer request is on its way
+      state.page = d.page;
+      state.statList = d.stats;
+      for (const k of [...state.stats]) if (!d.stats.some((s) => s.key === k)) state.stats.delete(k);
+      renderStats();
+      body.innerHTML = d.rows.map((r) => `
+        <tr data-id="${r.id}" class="aa-db-row${r.id === state.selected ? ' table-active' : ''}">
+          <td class="aa-mono">${r.id}</td>
+          <td><span class="aa-db-icon aa-db-icon-${AA.esc(r.q)}"></span></td>
+          <td class="aa-quality-${AA.esc(r.q)}" data-no-i18n>${AA.esc(nameOf(r))}</td>
+          <td>${r.lv}</td>
+        </tr>`).join('') || `<tr><td colspan="4" class="text-muted text-center py-4">${AA.t('没有符合条件的物品')}</td></tr>`;
+      const from = d.total ? (d.page - 1) * d.size + 1 : 0, to = Math.min(d.total, d.page * d.size);
+      document.getElementById('f-summary').textContent = AA.t('第 {0} 至 {1} 项，共 {2} 项', from, to, AA.fmtNum(d.total));
+      renderPager(d.page, d.pages);
+    }
+
+    let timer = 0;
+    const reload = (delay = 0) => { state.page = 1; clearTimeout(timer); timer = setTimeout(load, delay); };
+
     function renderItems(route) {
-      document.getElementById('t-head').innerHTML = headHtml();
-      document.getElementById('t-body').innerHTML = `<tr><td colspan="4" class="text-muted text-center py-4">${AA.t('物品数据还没接入（分类 {0}）', AA.esc(route))}</td></tr>`;
-      document.getElementById('f-summary').textContent = AA.t('共 {0} 项', 0);
-      document.getElementById('f-pager').innerHTML = `<li class="page-item disabled"><a class="page-link">${AA.t('上一页')}</a></li>
-        <li class="page-item active"><a class="page-link">1</a></li><li class="page-item disabled"><a class="page-link">${AA.t('下一页')}</a></li>`;
+      const cat = route.replace(/^item\/?/, '');
+      if (cat !== state.cat) { state.cat = cat; state.selected = 0; }
+      reload();
     }
 
     const toggle = (set, v) => { set.has(v) ? set.delete(v) : set.add(v); };
     document.querySelectorAll('.aa-db-race').forEach((b) => b.addEventListener('click', () => {
-      b.classList.toggle('on'); toggle(state.races, b.dataset.race);
+      b.classList.toggle('on'); toggle(state.races, b.dataset.race); reload();
     }));
-    document.getElementById('f-quality').addEventListener('change', (e) => toggle(state.qualities, e.target.value));
+    document.getElementById('f-quality').addEventListener('change', (e) => { toggle(state.qualities, e.target.value); reload(); });
     document.getElementById('f-stats').addEventListener('click', (e) => {
       const b = e.target.closest('[data-stat]'); if (!b) return;
       b.classList.toggle('on'); toggle(state.stats, b.dataset.stat);
-      statsCount();
+      statsCount(); reload();
+    });
+    ['f-lv-min', 'f-lv-max', 'f-q'].forEach((id) => document.getElementById(id).addEventListener('input', () => reload(350)));
+    document.getElementById('f-size').addEventListener('change', () => reload());
+    document.getElementById('f-pager').addEventListener('click', (e) => {
+      const a = e.target.closest('[data-page]'); if (!a) return;
+      e.preventDefault();
+      const n = +a.dataset.page;
+      if (!n || a.parentElement.classList.contains('disabled') || a.parentElement.classList.contains('active')) return;
+      state.page = n; load();
+    });
+    // row click selects the item; the detail card on the right will show it (to be built)
+    document.getElementById('t-body').addEventListener('click', (e) => {
+      const tr = e.target.closest('tr[data-id]'); if (!tr) return;
+      state.selected = +tr.dataset.id;
+      document.querySelectorAll('#t-body tr.table-active').forEach((x) => x.classList.remove('table-active'));
+      tr.classList.add('table-active');
     });
     // 附加属性 is collapsed by default; the header shows how many are selected
     function statsCount() {
@@ -217,7 +278,7 @@
       document.querySelectorAll('#db-items .on').forEach((x) => x.classList.remove('on'));
       document.querySelectorAll('#f-quality input').forEach((x) => { x.checked = false; });
       state.races.clear(); state.qualities.clear(); state.stats.clear();
-      statsCount();
+      statsCount(); reload();
     });
 
     function render() {

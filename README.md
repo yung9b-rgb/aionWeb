@@ -152,6 +152,18 @@ py tools/build_items_cache.py --items <服务端>/Map/XML/L10N/items.xml --zh <�
 
 没有这个文件时后台也能启动：仪表盘会提示，角色背包里的物品显示成编号，「发送物品」和商城编辑器里的物品搜索用不了。生成之后不用重启，刷新页面即可。
 
+### 静态数据库的物品表（需要自己生成）
+
+「静态数据库」页面的物品列表来自 `data/db_items.json`，同样**不在仓库里**，用同样的参数生成：
+
+```bash
+py tools/build_db_items.py --items <服务端>/Map/XML/L10N/items.xml --zh <客户端中文字符串> --en <客户端英文字符串>
+```
+
+- 每个物品按官方物品编号段分到页面菜单的分类里（长剑、链甲上衣、魔石……）；烙印和技能书按可用职业分。
+- 附加属性来自 `bonus_attr1..12`；NPC 专用和测试物品会标成隐藏，列表默认不显示。
+- 重新生成后不用重启后台，下次查询会自动读新文件。
+
 ## 目录
 
 | 路径 | 说明 |
@@ -165,11 +177,13 @@ py tools/build_items_cache.py --items <服务端>/Map/XML/L10N/items.xml --zh <�
 | `server/shopdb.ts` | `AionShop` 建表、点券、订单、目录、操作记录的数据访问 |
 | `server/db.ts` | SQL Server 连接池（按库名；纯 JS 驱动，直连 TCP，密码来自 `config.json` 或环境变量） |
 | `server/items.ts` | 物品库：名称、品质、最大堆叠、魔石孔、强化上限 |
+| `server/dbstatic.ts` | 静态数据库：物品表按分类、等级、种族、品质、附加属性、搜索筛选和分页 |
 | `server/config.ts` | 配置加载（相对路径按项目目录解析） |
 | `server/i18n.ts` | 服务端双语消息：按请求头 `X-Lang` 返回中文或英文 |
 | `public/` | 前端页面；界面基于 Majestic Admin 模板 |
 | `public/js/i18n.js` | 英文词典，以中文原文为键 |
 | `tools/build_items_cache.py` | 生成物品缓存 `data/items_cache.json`（不在仓库里，见「物品缓存」） |
+| `tools/build_db_items.py` | 生成静态数据库物品表 `data/db_items.json`（不在仓库里，见「静态数据库的物品表」） |
 | `tools/check_db.ts` | `npm run db:check`：不启动后台，单独检查 SQL Server 连接 |
 | `data/shop.json` | 初始商品目录（数据库为空时导入） |
 | `db/` | 建表 SQL 和脱敏示例备份 |
