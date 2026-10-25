@@ -127,6 +127,7 @@ export function getItem(id: number) {
     gear, slots: { base: slots, extra: gear ? Math.max(0, Math.min(info.slot_bonus, 6 - slots)) : 0 },
     maxEnchant: maxEnchant(id, info),
     refs: { abyssItem: ref(f.abyss_item), extraCurrency: ref(f.extra_currency_item), tradeIn: ref(f.trade_in_item) },
+    groups: itemGroups(id),
   };
 }
 
@@ -174,6 +175,32 @@ export function queryGroups(q: { search: string; page: number; size: number; sor
     total: rows.length, page, pages, size, sort: q.sort ?? 'id', desc: !!q.desc,
     rows: rows.slice((page - 1) * size, page * size).map((g) => ({ id: g.id, name: g.name, items: g.items.length, users: g.users })),
   };
+}
+
+// item id -> [group id, weight] for every drop group holding it; rebuilt when the group file is reloaded
+let groupsByItem: { src: object; map: Map<number, Array<[number, number]>> } | null = null;
+
+// Drop groups containing an item (null when there is no group data). best = the highest per-kill chance of this
+// item among the NPCs referencing the group (weight x their biggest adjustment / 100), in 1/10,000,000.
+function itemGroups(id: number) {
+  if (!fs.existsSync(GROUPS_FILE)) return null;
+  const gc = loadGroups();
+  if (!groupsByItem || groupsByItem.src !== gc) {
+    const map = new Map<number, Array<[number, number]>>();
+    for (const g of gc.groups) for (const [iid, w] of g.items) {
+      if (typeof iid !== 'number') continue;
+      let a = map.get(iid);
+      if (!a) map.set(iid, a = []);
+      a.push([g.id, w]);
+    }
+    groupsByItem = { src: gc, map };
+  }
+  return (groupsByItem.map.get(id) ?? []).map(([gid, w]) => {
+    const g = gc.byId.get(gid)!;
+    const maxAdj = g.npcs?.[0]?.[1] ?? 0;
+    return { id: gid, name: g.name, weight: w, total: g.items.reduce((n, [, x]) => n + x, 0), users: g.users,
+      best: Math.min(w * maxAdj / 100, 1e7) };
+  });
 }
 
 export function getGroup(id: number) {

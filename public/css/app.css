@@ -132,3 +132,9 @@ select.form-control, .dataTables_wrapper select { color: #212529 !important; }
 .aa-tip-flag .mdi { margin-right: 2px; }
 .aa-tip-flag.on .mdi { color: #4fd18b; }
 .aa-db-raw td:first-child { width: 45%; }
+.aa-item-top { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.aa-item-side { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 12px; }
+.aa-side-box { border: 1px solid #e3e6ef; border-radius: 6px; padding: 10px 12px; }
+.aa-side-title { font-weight: 600; margin-bottom: 6px; }
+.aa-side-kv { display: flex; justify-content: space-between; gap: 12px; }
+.aa-side-kv > span { color: #6c7383; }

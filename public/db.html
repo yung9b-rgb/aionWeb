@@ -330,7 +330,7 @@
     });
 
     // ---- 物品详情: /api/db/items/:id -> tooltip-style 属性 tab + 原始数据 tab (every items.xml field) ----
-    const ist = { it: null, tab: 'info', seq: 0 };
+    const ist = { it: null, tab: 'groups', seq: 0, gpage: 1 };
     const yes = (v) => v !== undefined && /^(true|1)$/i.test(String(v).trim());
     const num = (v) => Number(v ?? 0) || 0;
     const RACE_NAME = ['天族', '魔族', '通用'];
@@ -360,10 +360,28 @@
         return;
       }
       if (seq !== ist.seq || state.selected !== id || gstate.active) return;
-      ist.it = it;
+      ist.it = it; ist.gpage = 1;
+      // the tooltip is the main view; beside it 附加信息 and the chat link, below it the 掉落组 / 原始数据 tabs
+      const link = `[item: ${it.id}]`;
       box.innerHTML = `
-        <ul class="nav nav-tabs aa-db-tabs mb-3">
-          <li class="nav-item"><a class="nav-link" href="#" data-itab="info">${AA.t('属性')}</a></li>
+        <div class="aa-item-top">
+          ${itemInfo(it)}
+          <div class="aa-item-side">
+            <div class="aa-side-box">
+              <div class="aa-side-title">${AA.t('附加信息')}</div>
+              <div class="aa-side-kv"><span>${AA.t('最大堆放数')}</span><b>${AA.fmtNum(Math.max(1, num(it.f.max_stack_count)))}</b></div>
+            </div>
+            <div class="aa-side-box">
+              <div class="aa-side-title">${AA.t('游戏视窗用超连结')}</div>
+              <div class="input-group input-group-sm">
+                <input type="text" class="form-control aa-mono" id="it-link" value="${AA.esc(link)}" readonly>
+                <button type="button" class="btn btn-primary" id="it-copy">${AA.t('复制')}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <ul class="nav nav-tabs aa-db-tabs mt-4 mb-3">
+          <li class="nav-item"><a class="nav-link" href="#" data-itab="groups">${AA.t('掉落组')} <span class="badge bg-light text-dark">${it.groups ? it.groups.length : '-'}</span></a></li>
           <li class="nav-item"><a class="nav-link" href="#" data-itab="raw">${AA.t('原始数据')} <span class="badge bg-light text-dark">${Object.keys(it.f).length}</span></a></li>
         </ul>
         <div id="it-body"></div>`;
@@ -373,7 +391,35 @@
     function renderItemTab() {
       const it = ist.it; if (!it) return;
       document.querySelectorAll('#db-detail [data-itab]').forEach((a) => a.classList.toggle('active', a.dataset.itab === ist.tab));
-      document.getElementById('it-body').innerHTML = ist.tab === 'raw' ? itemRaw(it) : itemInfo(it);
+      document.getElementById('it-body').innerHTML = ist.tab === 'raw' ? itemRaw(it) : itemGroupsTab(it);
+      if (ist.tab === 'groups' && it.groups && it.groups.length > IG_SIZE) {
+        renderPager(ist.gpage, Math.ceil(it.groups.length / IG_SIZE), 'ig-pager');
+      }
+    }
+
+    // 掉落组 tab: the CommonDropItems groups holding this item; a click opens the group on the 掉落组 page
+    const IG_SIZE = 10;
+    function itemGroupsTab(it) {
+      if (!it.groups) return `<p class="text-muted">${AA.t('没有掉落组数据：先用 tools/build_db_dropgroups.py 生成（见 README）')}</p>`;
+      if (!it.groups.length) return `<p class="text-muted">${AA.t('没有掉落组包含这件物品。')}</p>`;
+      const pages = Math.ceil(it.groups.length / IG_SIZE);
+      const page = ist.gpage = Math.min(Math.max(ist.gpage, 1), pages);
+      const view = it.groups.slice((page - 1) * IG_SIZE, page * IG_SIZE);
+      return `<div class="table-responsive"><table class="table table-sm aa-db-table">
+        <thead><tr><th style="width:80px">ID</th><th>${AA.t('掉落组')}</th>
+          <th style="width:86px" title="${AA.t('掉落系数 100 时，每掷一次出这件的概率')}">${AA.t('每次概率')}</th>
+          <th style="width:76px">${AA.t('组内占比')}</th>
+          <th style="width:76px">${AA.t('引用 NPC')}</th>
+          <th style="width:96px" title="${AA.t('引用这个组的怪物里，掉落系数最高的那只击杀一次出这件的概率')}">${AA.t('最高概率')}</th></tr></thead>
+        <tbody>${view.map((g) => `
+          <tr class="aa-db-row" data-gopen="${g.id}">
+            <td class="aa-mono">${g.id}</td><td class="aa-mono" data-no-i18n>${AA.esc(g.name)}</td>
+            <td class="aa-mono">${pct(g.weight)}</td>
+            <td class="aa-mono">${g.total ? (g.weight / g.total * 100).toFixed(1) + '%' : ''}</td>
+            <td>${AA.fmtNum(g.users)}</td><td class="aa-mono">${g.users ? pct(g.best) : '-'}</td>
+          </tr>`).join('')}</tbody></table></div>
+        ${pages > 1 ? `<nav class="d-flex justify-content-end"><ul class="pagination pagination-sm mb-2" id="ig-pager"></ul></nav>` : ''}
+        <p class="text-muted small mb-0">${AA.t('点一行打开这个掉落组。每次概率按掉落系数 100 计算；一个组每次击杀最多出一件。')}</p>`;
     }
 
     function itemInfo(it) {
@@ -445,7 +491,6 @@
         f.activation_skill && num(f.activation_count) > 0 && ['使用次数', num(f.activation_count)],
         num(f.expire_time) && ['使用期限', minutes(num(f.expire_time))],
         num(f.cash_available_minute) && ['可用时间', minutes(num(f.cash_available_minute))],
-        num(f.max_stack_count) > 1 && ['最大堆叠', AA.fmtNum(f.max_stack_count)],
       ]);
       const desc = it.desc ? (AA.lang === 'en' ? (it.desc.en || it.desc.zh) : (it.desc.zh || it.desc.en)) : '';
       return `<div class="aa-tip">
@@ -481,14 +526,33 @@
       <p class="text-muted small mb-0">${AA.t('服务端 items.xml 里这件物品的全部字段，按文件中的顺序。')}</p>`;
     }
 
-    document.getElementById('db-detail').addEventListener('click', (e) => {
+    document.getElementById('db-detail').addEventListener('click', async (e) => {
+      if (gstate.active || !ist.it) return;
       const t = e.target.closest('[data-itab]');
-      if (!t || gstate.active || !ist.it) return;
-      e.preventDefault(); ist.tab = t.dataset.itab; renderItemTab();
+      if (t) { e.preventDefault(); ist.tab = t.dataset.itab; renderItemTab(); return; }
+      const pg = e.target.closest('#ig-pager [data-page]');
+      if (pg) {
+        e.preventDefault();
+        const n = +pg.dataset.page;
+        if (n && !pg.parentElement.classList.contains('disabled')) { ist.gpage = n; renderItemTab(); }
+        return;
+      }
+      const row = e.target.closest('[data-gopen]');
+      if (row) {                              // open the group on the 掉落组 page, listed by its id
+        gstate.open = +row.dataset.gopen;
+        document.getElementById('g-q').value = row.dataset.gopen;
+        location.hash = '#item/dropgroup';
+        return;
+      }
+      if (e.target.closest('#it-copy')) {
+        const input = document.getElementById('it-link');
+        try { await navigator.clipboard.writeText(input.value); } catch { input.select(); document.execCommand('copy'); }
+        AA.toast(AA.t('已复制：{0}', input.value));
+      }
     });
 
     // ---- 掉落组 ----
-    const gstate = { page: 1, sort: 'id', desc: false, seq: 0, selected: 0, active: false };
+    const gstate = { page: 1, sort: 'id', desc: false, seq: 0, selected: 0, active: false, open: 0 };
     const DETAIL_EMPTY = document.getElementById('db-detail').innerHTML;
     const pct = (w) => {                       // weight is per roll in 1/10,000,000
       const v = w / 1e5;
@@ -686,7 +750,11 @@
         document.getElementById('db-detail').innerHTML = isGroups
           ? `<div class="aa-db-detail-empty"><i class="mdi mdi-information-outline"></i><div>${AA.t('点击左侧列表中的掉落组查看组内物品')}</div></div>`
           : DETAIL_EMPTY;
-        if (isGroups) { gstate.selected = 0; loadGroups(); }
+        if (isGroups) {
+          gstate.selected = gstate.open; gstate.open = 0;     // opened from an item's 掉落组 tab
+          loadGroups();
+          if (gstate.selected) showGroup(gstate.selected);
+        } else if (state.selected) showItem(state.selected);  // back from 掉落组: show the selected item again
       }
       if (isItem) {
         renderItems(path.map((n) => n[0]).join('/'));
