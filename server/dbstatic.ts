@@ -94,7 +94,15 @@ function loadGroups() {
 export function queryGroups(q: { search: string; page: number; size: number; sort?: 'id' | 'items' | 'users'; desc?: boolean }) {
   const { groups } = loadGroups();
   const s = q.search.trim().toLowerCase();
-  const rows = groups.filter((g) => !s || String(g.id) === s || g.name.toLowerCase().includes(s));
+  // search matches the group id / name, or any item in the group (id, Chinese, English or internal name)
+  const { byId } = s ? load() : { byId: new Map<number, DbItem>() };
+  const itemHit = (iid: number | string) => {
+    if (typeof iid === 'string') return iid.toLowerCase().includes(s);
+    if (String(iid) === s) return true;
+    const it = byId.get(iid);
+    return !!it && (it.zh.toLowerCase().includes(s) || it.en.toLowerCase().includes(s) || it.k.toLowerCase().includes(s));
+  };
+  const rows = groups.filter((g) => !s || String(g.id) === s || g.name.toLowerCase().includes(s) || g.items.some(([iid]) => itemHit(iid)));
   const key = (g: DropGroup) => (q.sort === 'items' ? g.items.length : q.sort === 'users' ? g.users : g.id);
   const dir = q.desc ? -1 : 1;
   rows.sort((a, b) => (key(a) - key(b)) * dir || a.id - b.id);

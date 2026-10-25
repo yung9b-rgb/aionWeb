@@ -46,7 +46,7 @@
                       </div>
                       <div class="d-flex align-items-center gap-2">
                         <span>搜索：</span>
-                        <input type="text" class="form-control form-control-sm" id="g-q" placeholder="组名或 ID" style="width:180px">
+                        <input type="text" class="form-control form-control-sm" id="g-q" placeholder="组名、ID 或掉落物名称" style="width:200px">
                       </div>
                     </div>
                     <div class="aa-db-bar">
@@ -374,6 +374,8 @@
         box.innerHTML = `<div class="text-danger">${AA.esc(e.message)}</div>`; return;
       }
       if (!gstate.active || gstate.selected !== id) return;
+      const s = val('g-q').toLowerCase();       // highlight the items that matched the search
+      const hit = (it) => s && (String(it.id) === s || [it.zh, it.en, it.k].some((x) => (x || '').toLowerCase().includes(s)));
       box.innerHTML = `
         <h4 class="mb-1 aa-mono" data-no-i18n>${AA.esc(g.name)}</h4>
         <p class="text-muted small mb-3">ID ${g.id} · ${AA.t('{0} 件物品', g.items.length)} · ${AA.t('{0} 只怪引用', AA.fmtNum(g.users))}
@@ -384,7 +386,7 @@
               <th style="width:86px" title="${AA.t('掉落系数 100 时，每掷一次出这件的概率')}">${AA.t('每次概率')}</th>
               <th style="width:76px">${AA.t('组内占比')}</th></tr></thead>
             <tbody>${g.items.map((it) => `
-              <tr>
+              <tr class="${hit(it) ? 'table-warning' : ''}">
                 <td><span class="aa-db-icon aa-db-icon-${AA.esc(it.q)}">${it.ic ? `<img src="icons/item/${encodeURIComponent(it.ic)}.png" alt="" loading="lazy" onerror="this.remove()">` : ''}</span></td>
                 <td data-no-i18n class="text-nowrap"><span class="aa-quality-${AA.esc(it.q)}">${AA.esc(nameOf(it))}</span>
                   <div class="text-muted small aa-mono">${it.id || ''}</div></td>
