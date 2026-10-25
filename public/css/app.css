@@ -94,7 +94,8 @@ select.form-control, .dataTables_wrapper select { color: #212529 !important; }
 .aa-db-detail-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #a3a9b6; gap: 8px; }
 .aa-db-detail-empty .mdi { font-size: 2.4rem; }
 .aa-db-row { cursor: pointer; }
-.aa-db-icon { display: inline-block; width: 32px; height: 32px; border-radius: 4px; background: #eef0f5; border: 2px solid #d6dae6; vertical-align: middle; }
+.aa-db-icon { display: inline-block; width: 40px; height: 40px; border-radius: 4px; background: #2b2f38; border: 2px solid #d6dae6; vertical-align: middle; overflow: hidden; }
+.aa-db-icon img { width: 100%; height: 100%; display: block; }
 .aa-db-icon-rare { border-color: #19a974; }
 .aa-db-icon-legend { border-color: #2a7be4; }
 .aa-db-icon-unique { border-color: #e0a100; }

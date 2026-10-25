@@ -218,7 +218,7 @@
       body.innerHTML = d.rows.map((r) => `
         <tr data-id="${r.id}" class="aa-db-row${r.id === state.selected ? ' table-active' : ''}">
           <td class="aa-mono">${r.id}</td>
-          <td><span class="aa-db-icon aa-db-icon-${AA.esc(r.q)}"></span></td>
+          <td><span class="aa-db-icon aa-db-icon-${AA.esc(r.q)}">${r.ic ? `<img src="icons/item/${encodeURIComponent(r.ic)}.png" alt="" loading="lazy" onerror="this.remove()">` : ''}</span></td>
           <td class="aa-quality-${AA.esc(r.q)}" data-no-i18n>${AA.esc(nameOf(r))}</td>
           <td>${r.lv}</td>
         </tr>`).join('') || `<tr><td colspan="4" class="text-muted text-center py-4">${AA.t('没有符合条件的物品')}</td></tr>`;

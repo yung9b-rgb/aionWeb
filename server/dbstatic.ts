@@ -10,6 +10,7 @@ export type DbItem = {
   race: number;                     // 0 天族, 1 魔族, 2 both
   c: string[];                      // menu routes without the 'item/' prefix, e.g. armor/chain/chest
   st?: Record<string, string>;      // bonus stats: key -> value ('120', '5%')
+  ic?: string;                      // icon name: public/icons/item/<ic>.png (tools/build_db_icons.py)
   h?: 1;                            // npc-only / test item
 };
 
@@ -56,7 +57,7 @@ export function queryItems(q: ItemQuery) {
   const page = Math.min(Math.max(q.page, 1), pages);
   return {
     total: rows.length, page, pages, size,
-    rows: rows.slice((page - 1) * size, page * size).map(({ id, k, zh, en, lv, q: quality, race }) => ({ id, k, zh, en, lv, q: quality, race })),
+    rows: rows.slice((page - 1) * size, page * size).map(({ id, k, zh, en, lv, q: quality, race, ic }) => ({ id, k, zh, en, lv, q: quality, race, ic })),
     stats: [...statCount].sort((a, b) => b[1] - a[1]).map(([key, n]) => ({ key, label: labels[key] ?? key, n })),
   };
 }

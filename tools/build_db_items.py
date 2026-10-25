@@ -4,7 +4,8 @@ the server's items.xml plus the client's Chinese and/or English string tables.
 usage:
   py tools/build_db_items.py --items <server items.xml> [--zh <Chinese strings>] [--en <English strings>] [--out <file>]
 
-Arguments are the same as tools/build_items_cache.py (see there). Each item gets its menu categories (the route keys
+Arguments are the same as tools/build_items_cache.py (see there), plus --client <client>/Data/Items/Items.pak (or its
+client_items.xml), which gives each item its icon name ("ic"; the PNGs come from tools/build_db_icons.py). Each item gets its menu categories (the route keys
 used by public/db.html, e.g. armor/chain/chest), level, quality, race and bonus stats. Restart the admin after
 rebuilding the file.
 
@@ -12,7 +13,7 @@ Categories follow the official item-id ranges (1000xxxxx swords, 1105xxxxx chain
 stigmas and skill books are filed under every class that may use them. NPC-only and test items are kept but marked
 hidden ("h": 1), so the page leaves them out unless asked.
 """
-import argparse, html, json, os, re, sys
+import argparse, html, json, os, re, sys, zipfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from build_items_cache import decode, strings
@@ -104,15 +105,37 @@ def parse_stats(f):
     return out
 
 
+def client_icons(src):
+    """item id -> lower-case icon name, from the client's client_items.xml (file, folder, or ZIP-format Items.pak)."""
+    if not src:
+        return {}
+    if os.path.isdir(src):
+        src = os.path.join(src, 'client_items.xml')
+    if zipfile.is_zipfile(src):
+        with zipfile.ZipFile(src) as z:
+            n = next((x for x in z.namelist() if x.lower().endswith('client_items.xml')), None)
+            if not n: sys.exit(f'{src}: no client_items.xml inside')
+            text = decode(z.read(n))
+    else:
+        text = decode(open(src, 'rb').read())
+    out = {}
+    for blk in re.findall(r'<client_item>(.*?)</client_item>', text, re.S):
+        i, ic = re.search(r'<id>(\d+)</id>', blk), re.search(r'<icon_name>([^<]+)</icon_name>', blk)
+        if i and ic: out[i.group(1)] = ic.group(1).strip().lower()
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--items', required=True)
     ap.add_argument('--zh')
     ap.add_argument('--en')
+    ap.add_argument('--client', help='client Data/Items/Items.pak (ZIP format) or client_items.xml, for icon names')
     ap.add_argument('--out', default=os.path.join(HERE, '..', 'data', 'db_items.json'))
     a = ap.parse_args()
     if not a.zh and not a.en: ap.error('give --zh and/or --en')
     zh, en = strings(a.zh), strings(a.en)
+    icons = client_icons(a.client)
     rows = []
     for x in re.findall(r'<item>(.*?)</item>', decode(open(a.items, 'rb').read()), re.S):
         f = {k: html.unescape(v) for k, v in re.findall(r'<(\w+)>([^<]*)</\1>', x)}
@@ -122,6 +145,7 @@ def main():
         race = 2 if ('pc_light' in rp and 'pc_dark' in rp) else 0 if 'pc_light' in rp else 1 if 'pc_dark' in rp else 2
         r = dict(id=int(f['id']), k=name, zh=zh.get(key, ''), en=en.get(key, ''),
                  lv=int(f.get('level', '0') or 0), q=f.get('quality', 'common').lower(), race=race, c=categories(f))
+        if icons.get(f['id']): r['ic'] = icons[f['id']]
         st = parse_stats(f)
         if st: r['st'] = st
         if re.match(r'(npc_|test)', name.lower()) or '_test' in name.lower(): r['h'] = 1
@@ -136,6 +160,7 @@ def main():
     from collections import Counter
     cats = Counter(c.split('/')[0] for r in rows for c in r['c'])
     print(f'{len(rows)} items -> {os.path.abspath(a.out)}; {sum(1 for r in rows if r["zh"])} Chinese names; '
+          f'{sum(1 for r in rows if r.get("ic"))} icons; '
           f'{sum(1 for r in rows if r.get("h"))} hidden (npc/test); by top category: {dict(cats)}')
 
 
