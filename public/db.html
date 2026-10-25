@@ -190,7 +190,9 @@
       ]],
       ['skill', '技能', null],
       ['quest', '任务', null],
-      ['npc', 'NPC', [['light', '天族'], ['dark', '魔族'], ['monster', '怪物'], ['chief', '头目'], ['boss', '命名BOSS']]],
+      // 副本: one entry per instance, filled from /api/db/npcs/instances; shown as a grid (there are ~50)
+      ['npc', 'NPC', [['light', '天族'], ['dark', '魔族'], ['monster', '怪物'], ['chief', '头目'], ['boss', '命名BOSS'], '-',
+        ['instance', '副本', [], 'grid']]],
     ];
     const ICONS = { item: 'mdi-sword-cross', skill: 'mdi-flash', quest: 'mdi-book-open-variant', npc: 'mdi-account-group' };
 
@@ -206,19 +208,22 @@
       return path;
     }
 
-    function subMenu(nodes, prefix) {
-      return `<ul class="aa-dbmenu-sub">${nodes.map((n) => {
+    function subMenu(nodes, prefix, grid) {
+      return `<ul class="aa-dbmenu-sub${grid ? ' aa-dbmenu-grid' : ''}">${nodes.map((n) => {
         if (n === '-') return '<li class="aa-dbmenu-sep"></li>';
-        const [k, title, kids] = n, r = prefix + '/' + k;
-        return `<li class="${kids ? 'has-sub' : ''}"><a href="#${r}">${AA.esc(AA.t(title))}${kids ? '<i class="mdi mdi-chevron-right"></i>' : ''}</a>${kids ? subMenu(kids, r) : ''}</li>`;
+        const [k, title, kids, kind] = n, r = prefix + '/' + k;
+        return `<li class="${kids ? 'has-sub' : ''}"><a href="#${r}">${AA.esc(AA.t(title))}${kids ? '<i class="mdi mdi-chevron-right"></i>' : ''}</a>${kids && kids.length ? subMenu(kids, r, kind === 'grid') : ''}</li>`;
       }).join('')}</ul>`;
     }
 
-    document.getElementById('dbmenu').innerHTML = TREE.map(([k, title, kids]) => `
-      <li class="aa-dbmenu-top${kids ? '' : ' aa-dbmenu-empty'}" data-top="${k}">
-        <a href="#${k}"><i class="mdi ${ICONS[k]}"></i> ${AA.esc(AA.t(title))}${kids ? ' <i class="mdi mdi-chevron-down"></i>' : ''}</a>
-        ${kids ? subMenu(kids, k) : ''}
-      </li>`).join('');
+    function buildMenu() {
+      document.getElementById('dbmenu').innerHTML = TREE.map(([k, title, kids]) => `
+        <li class="aa-dbmenu-top${kids ? '' : ' aa-dbmenu-empty'}" data-top="${k}">
+          <a href="#${k}"><i class="mdi ${ICONS[k]}"></i> ${AA.esc(AA.t(title))}${kids ? ' <i class="mdi mdi-chevron-down"></i>' : ''}</a>
+          ${kids ? subMenu(kids, k) : ''}
+        </li>`).join('');
+    }
+    buildMenu();
 
     // close the open flyout after a click so the page underneath is visible
     document.getElementById('dbmenu').addEventListener('click', (e) => {
@@ -588,11 +593,12 @@
 
     // ---- NPC: /api/db/npcs (server-side filter + paging), detail from /api/db/npcs/:id ----
     const GRADES = [['normal', '普通'], ['elite', '精英'], ['hero', '英雄'], ['legend', '传说']];
-    const NPC_CAT = { light: '天族', dark: '魔族', monster: '怪物', chief: '头目', boss: '命名BOSS' };
-    const nstate = { cat: '', page: 1, grades: new Set(), sort: 'id', desc: false, seq: 0, selected: 0 };
+    const NPC_CAT = { light: '天族', dark: '魔族', monster: '怪物', chief: '头目', boss: '命名BOSS', instance: '副本' };
+    const nstate = { cat: '', map: '', page: 1, grades: new Set(), sort: 'id', desc: false, seq: 0, selected: 0 };
     const gradeName = (g) => AA.t((GRADES.find(([k]) => k === g) || [, ''])[1]);
     const npcName = (n) => (AA.lang === 'en' ? (n.en || n.zh || n.k) : (n.zh || n.en || n.k));
-    const npcTitle = (n) => (n.t ? (AA.lang === 'en' ? (n.t[1] || n.t[0]) : (n.t[0] || n.t[1])) : '');
+    // titles are shown as <title>; some strings already carry the brackets
+    const npcTitle = (n) => (n.t ? (AA.lang === 'en' ? (n.t[1] || n.t[0]) : (n.t[0] || n.t[1])) : '').replace(/^\s*<(.*)>\s*$/, '$1');
     const mapName = (m) => (AA.lang === 'en' ? m.en : m.zh);
     const NPC_EMPTY = `<div class="aa-db-detail-empty"><i class="mdi mdi-information-outline"></i><div>${AA.t('点击左侧列表中的 NPC 查看详情')}</div></div>`;
 
@@ -612,6 +618,7 @@
 
     async function loadNpcs() {
       const q = new URLSearchParams({ cat: nstate.cat, page: nstate.page, size: val('n-size'), sort: nstate.sort, dir: nstate.desc ? 'desc' : 'asc' });
+      if (nstate.map) q.set('map', nstate.map);
       if (val('n-lv-min')) q.set('lvMin', val('n-lv-min'));
       if (val('n-lv-max')) q.set('lvMax', val('n-lv-max'));
       if (nstate.grades.size) q.set('grade', [...nstate.grades].join(','));
@@ -624,14 +631,17 @@
       }
       if (seq !== nstate.seq) return;
       nstate.page = d.page;
+      // 副本 lists don't split bosses from mobs; only the factions' NPCs are marked
+      const inInst = nstate.cat === 'instance';
       body.innerHTML = d.rows.map((n) => {
         const title = npcTitle(n);
-        const where = n.maps ? n.maps.map(mapName).map(AA.esc).join('、') + (n.more ? ` <span class="text-muted">+${n.more}</span>` : '')
+        // versions of one instance share a name: show it once
+        const where = n.maps ? [...new Set(n.maps.map(mapName))].map(AA.esc).join('、') + (n.more ? ` <span class="text-muted">+${n.more}</span>` : '')
           : `<span class="text-muted">${AA.t(n.ai ? '由其他 NPC 召唤' : '无刷新点')}</span>`;
         return `<tr data-nid="${n.id}" class="aa-db-row${n.id === nstate.selected ? ' table-active' : ''}">
           <td class="aa-mono">${n.id}</td>
-          <td data-no-i18n><span class="aa-npc-${n.c || 'other'}">${AA.esc(npcName(n))}</span>
-            ${!nstate.cat && n.c ? `<span class="aa-npc-cat">${AA.t(NPC_CAT[n.c])}</span>` : ''}
+          <td data-no-i18n><span class="aa-npc-${inInst && !FACTION.includes(n.c) ? 'monster' : n.c || 'other'}">${AA.esc(npcName(n))}</span>
+            ${(!nstate.cat && n.c) || (inInst && FACTION.includes(n.c)) ? `<span class="aa-npc-cat">${AA.t(NPC_CAT[n.c])}</span>` : ''}
             ${title ? `<div class="text-muted small">&lt;${AA.esc(title)}&gt;</div>` : ''}</td>
           <td>${n.lv}</td><td>${gradeName(n.grade)}</td><td class="small" data-no-i18n>${where}</td>
         </tr>`;
@@ -643,10 +653,22 @@
 
     let ntimer = 0;
     const nreload = (delay = 0) => { nstate.page = 1; clearTimeout(ntimer); ntimer = setTimeout(loadNpcs, delay); };
-    function renderNpcs(cat) {
-      if (cat !== nstate.cat) { nstate.cat = cat; nstate.selected = 0; document.getElementById('db-detail').innerHTML = NPC_EMPTY; }
+    const FACTION = ['light', 'dark'];
+    function renderNpcs(cat, map) {
+      if (cat !== nstate.cat || map !== nstate.map) {
+        nstate.cat = cat; nstate.map = map; nstate.selected = 0;
+        document.getElementById('db-detail').innerHTML = NPC_EMPTY;
+      }
       nreload();
     }
+
+    // 副本 submenu entries come from the NPC data (instances with their typical level)
+    AA.api('GET', '/api/db/npcs/instances').then((list) => {
+      const node = TREE.find((n) => n[0] === 'npc')[2].find((n) => n[0] === 'instance');
+      node[2] = list.map((i) => [i.key, `${AA.lang === 'en' ? i.en : i.zh} · Lv${i.lv}`]);
+      buildMenu();
+      render();
+    }).catch(() => {});
     document.getElementById('n-grade').addEventListener('change', (e) => { toggle(nstate.grades, e.target.value); nreload(); });
     ['n-lv-min', 'n-lv-max', 'n-q'].forEach((id) => document.getElementById(id).addEventListener('input', () => nreload(350)));
     document.getElementById('n-size').addEventListener('change', () => nreload());
@@ -687,7 +709,7 @@
       }
       if (seq !== nseq || nstate.selected !== id || pageKind !== 'npc') return;
       const title = npcTitle(n);
-      const maps = (n.maps || []).map((w) => (AA.lang === 'en' ? n.mapNames[w][1] : n.mapNames[w][0]) || w);
+      const maps = [...new Set((n.maps || []).map((w) => (AA.lang === 'en' ? n.mapNames[w][1] : n.mapNames[w][0]) || w))];
       box.innerHTML = `<div class="aa-tip aa-tip-npc">
         <div class="aa-tip-name">
           <div class="aa-tip-title-name aa-npc-${n.c || 'other'}" data-no-i18n>${AA.esc(npcName(n))}</div>
@@ -916,7 +938,7 @@
           if (nstate.selected) showNpc(nstate.selected);
         } else if (isItem && state.selected) showItem(state.selected);  // back from another page: show the selected item again
       }
-      if (isNpc) renderNpcs(path[1] ? path[1][0] : '');
+      if (isNpc) renderNpcs(path[1] ? path[1][0] : '', path[1] && path[1][0] === 'instance' && path[2] ? path[2][0] : '');
       if (isItem) {
         renderItems(path.map((n) => n[0]).join('/'));
         showStats(!NON_GEAR.includes(path[1] && path[1][0]));

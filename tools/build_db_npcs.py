@@ -15,11 +15,17 @@ Categories (the NPC submenu):
                 - a drop group holding equipment that no other NPC references.
   chief 头目:    the other named_monster = 1 NPCs.
   monster 怪物:  every other attackable NPC (not a faction NPC, field object or pet).
+  instance 副本: attackable non-faction NPCs that only appear in instances (map folders id*): no boss / mob split
+                there; the 副本 submenu lists the instances (same-named versions merged) with every such NPC in them,
+                plus the 天族 / 魔族 NPCs spawned there (in PvP instances those are the enemies).
+                NPCs on both field maps and instances keep their field category and are listed in the instance too.
 Anything else (neutral merchants, objects ...) only shows under the top-level NPC page. NPCs without a display name
 (triggers, invisible helpers) are flagged hidden and left out of the lists.
 
 "Other NPC" means NPCs that are actually spawned: named in a Map/Worlds/<map>/world.xml (the file the servers load)
 or spawned by an AI pattern (<npc_nameid> in Map/XML/NpcAIPatterns*.xml). Unspawned test copies don't count.
+An AI-spawned NPC is placed on the maps of the NPCs whose ai_name is that pattern (followed through chains).
+The test map idtest_dungeon is never shown as a map.
 """
 import argparse, glob, json, os, re, sys
 from collections import defaultdict
@@ -30,6 +36,8 @@ from build_items_cache import decode, strings
 HERE = os.path.dirname(os.path.abspath(__file__))
 DB_VER = 1
 GEAR = ('weapon/', 'armor/', 'accessory/', 'wing')
+TEST_MAPS = {'idtest_dungeon'}
+is_instance = lambda w: w.lower().startswith('id') and w.lower() not in TEST_MAPS
 
 
 def tag(blk, k):
@@ -67,9 +75,11 @@ def main():
         for n in re.findall(r'<name>([^<]+)</name>', decode(open(p, 'rb').read())):
             d = maps[n.strip().lower()]
             d[w] = d.get(w, 0) + 1
-    ai_spawned = set()
+    ai_children = defaultdict(set)           # AI pattern name -> NPC names it spawns
     for p in glob.glob(os.path.join(a.ai, 'NpcAIPatterns*.xml')):
-        ai_spawned |= {n.strip().lower() for n in re.findall(r'<npc_nameid>([^<]+)</npc_nameid>', decode(open(p, 'rb').read()))}
+        for m in re.finditer(r'<npc_ai_pattern>\s*<name>([^<]+)</name>(.*?)</npc_ai_pattern>', decode(open(p, 'rb').read()), re.S):
+            ai_children[m.group(1).strip().lower()] |= {n.strip().lower() for n in re.findall(r'<npc_nameid>([^<]+)</npc_nameid>', m.group(2))}
+    ai_spawned = set().union(*ai_children.values())
 
     npcs = []
     text = decode(open(a.npcs, 'rb').read())
@@ -88,8 +98,23 @@ def main():
             tzh=zh.get(title, '') if title else '', ten=en.get(title, '') if title else '',
             lv=int(tag(blk, 'level') or 0), g=int(tag(blk, 'hpgauge_level') or 0), hp=int(tag(blk, 'max_hp') or 0),
             named=tag(blk, 'named_monster') == '1', race=tag(blk, 'race_type').lower(), tribe=tag(blk, 'tribe'),
-            npc_type=tag(blk, 'npc_type').lower(), unatt=tag(blk, 'unattackable') == '1',
+            npc_type=tag(blk, 'npc_type').lower(), unatt=tag(blk, 'unattackable') == '1', ai=tag(blk, 'ai_name').lower(),
             direct=direct, common=common))
+
+    # AI-spawned NPCs appear where their summoner does (boss -> add -> next form ...)
+    where = {n['k'].lower(): set(maps.get(n['k'].lower(), {})) - TEST_MAPS for n in npcs}
+    by_ai = defaultdict(list)
+    for n in npcs:
+        if n['ai']: by_ai[n['ai']].append(n['k'].lower())
+    for _ in range(20):
+        changed = False
+        for pat, kids in ai_children.items():
+            src = set().union(*(where[k] for k in by_ai.get(pat, ())))
+            for kid in kids:
+                if kid in where and not src <= where[kid]:
+                    where[kid] |= src
+                    changed = True
+        if not changed: break
 
     # exclusivity among spawned NPCs; one display name = one NPC (level variants of the same mob)
     who = lambda n: (n['zh'] or n['k']).lower()
@@ -120,15 +145,39 @@ def main():
             cat = 'boss' if exclusive(n) else 'chief'
         else:
             cat = 'monster'
+        here = where[n['k'].lower()]
+        if cat in ('monster', 'chief', 'boss') and here and all(is_instance(w) for w in here):
+            cat = 'instance'
         count[cat or 'other'] += 1
         rec = dict(id=n['id'], k=n['k'], zh=n['zh'], en=n['en'], lv=n['lv'], g=n['g'], hp=n['hp'], c=cat,
                    race=n['race'], tribe=n['tribe'])
         if n['tzh'] or n['ten']: rec['t'] = [n['tzh'], n['ten']]
         if not (n['zh'].strip() or n['en'].strip()): rec['h'] = 1       # no display name: triggers, invisible helpers
-        sp = maps.get(n['k'].lower())
-        if sp: rec['maps'] = sorted(sp, key=lambda w: -sp[w])
-        elif n['k'].lower() in ai_spawned: rec['ai'] = 1          # spawned by another NPC's AI
+        sp = maps.get(n['k'].lower(), {})
+        here = where[n['k'].lower()]
+        if here:      # world.xml maps by spawn count, then maps reached through a summoner's AI
+            rec['maps'] = sorted(here, key=lambda w: (-sp.get(w, 0), w))
+        if n['k'].lower() in ai_spawned: rec['ai'] = 1          # (also) spawned by another NPC's AI
         out.append(rec)
+
+    # 副本 submenu: instances with their monsters; versions sharing a display name are one entry
+    zone = lambda w: zh.get('STR_ZONE_NAME_' + w.upper(), '') or w
+    inst = {}
+    for r in out:
+        if not r['c'] or r.get('h'): continue           # faction NPCs too: in PvP instances they are the enemies
+        for w in r.get('maps', ()):
+            if not is_instance(w): continue
+            e = inst.setdefault(zone(w), dict(key=w.lower(), zh=zone(w), en=en.get('STR_ZONE_NAME_' + w.upper(), '') or w,
+                                               maps=set(), ids=set(), lv=[]))
+            e['maps'].add(w)
+            if r['id'] not in e['ids']:
+                e['ids'].add(r['id']); e['lv'].append(r['lv'])
+    instances = []
+    for e in inst.values():
+        lv = sorted(e['lv'])
+        instances.append(dict(key=min(w.lower() for w in e['maps']), zh=e['zh'], en=e['en'], maps=sorted(e['maps']),
+                              n=len(e['ids']), lvMin=lv[0], lvMax=lv[-1], lv=lv[len(lv) // 2]))
+    instances.sort(key=lambda e: (e['lv'], e['zh']))
 
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     tmp = a.out + '.tmp'
@@ -136,9 +185,10 @@ def main():
         # map display names: STR_ZONE_NAME_<world folder> in the client strings
         names = {w: [zh.get('STR_ZONE_NAME_' + w.upper(), ''), en.get('STR_ZONE_NAME_' + w.upper(), '')] for w in
                  sorted({w for d in maps.values() for w in d})}
-        json.dump(dict(_ver=DB_VER, npcs=out, maps=names), fp, ensure_ascii=False, separators=(',', ':'))
+        json.dump(dict(_ver=DB_VER, npcs=out, maps=names, instances=instances), fp, ensure_ascii=False, separators=(',', ':'))
     os.replace(tmp, a.out)
-    print(f'{len(out)} NPCs -> {os.path.abspath(a.out)}; {len(spawned)} spawned; ' + ', '.join(f'{k} {v}' for k, v in sorted(count.items())))
+    print(f'{len(out)} NPCs -> {os.path.abspath(a.out)}; {len(spawned)} spawned; ' + ', '.join(f'{k} {v}' for k, v in sorted(count.items()))
+          + f'; {len(instances)} instances')
 
 
 if __name__ == '__main__':

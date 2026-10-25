@@ -230,7 +230,7 @@ export type DbNpc = {
   id: number; k: string; zh: string; en: string; lv: number;
   g: number;                        // hpgauge_level: 1-5 normal, 10-14 elite, 20-22 hero, 26-27 legend
   hp: number;
-  c: '' | 'light' | 'dark' | 'monster' | 'chief' | 'boss';
+  c: '' | 'light' | 'dark' | 'monster' | 'chief' | 'boss' | 'instance';   // instance: only spawned in instances
   race: string; tribe: string;
   t?: [string, string];             // title (Chinese, English)
   maps?: string[];                  // world.xml folders it is spawned in, most spawns first
@@ -238,7 +238,10 @@ export type DbNpc = {
   h?: 1;                            // no display name (triggers, invisible helpers): left out of the lists
 };
 const NPCS_FILE = path.join(ROOT, 'data', 'db_npcs.json');
-let npcCache: { mtime: number; npcs: DbNpc[]; byId: Map<number, DbNpc>; maps: Record<string, [string, string]> } | null = null;
+// 副本 submenu entry: instance versions sharing a display name, with the level spread of their NPCs
+type Instance = { key: string; zh: string; en: string; maps: string[]; n: number; lvMin: number; lvMax: number; lv: number };
+let npcCache: { mtime: number; npcs: DbNpc[]; byId: Map<number, DbNpc>; maps: Record<string, [string, string]>;
+  instances: Instance[] } | null = null;
 
 function loadNpcs() {
   if (!fs.existsSync(NPCS_FILE)) {
@@ -249,7 +252,7 @@ function loadNpcs() {
   if (!npcCache || npcCache.mtime !== mtime) {
     const raw = JSON.parse(fs.readFileSync(NPCS_FILE, 'utf8'));
     const npcs: DbNpc[] = raw.npcs ?? [];
-    npcCache = { mtime, npcs, byId: new Map(npcs.map((n) => [n.id, n])), maps: raw.maps ?? {} };
+    npcCache = { mtime, npcs, byId: new Map(npcs.map((n) => [n.id, n])), maps: raw.maps ?? {}, instances: raw.instances ?? [] };
   }
   return npcCache;
 }
@@ -257,14 +260,21 @@ function loadNpcs() {
 export const npcGrade = (g: number) => (g >= 26 ? 'legend' : g >= 20 ? 'hero' : g >= 10 ? 'elite' : g >= 1 ? 'normal' : '');
 
 export type NpcQuery = {
-  cat: string; lvMin?: number; lvMax?: number; grades: string[]; search: string; page: number; size: number;
+  cat: string; map?: string;        // cat 'instance': every listed NPC spawned in that instance (or in any instance) lvMin?: number; lvMax?: number; grades: string[]; search: string; page: number; size: number;
   sort?: 'id' | 'lv'; desc?: boolean;
 };
 
 export function queryNpcs(q: NpcQuery) {
-  const { npcs, maps } = loadNpcs();
+  const { npcs, maps, instances } = loadNpcs();
   const s = q.search.trim().toLowerCase();
-  const rows = npcs.filter((n) => !n.h && (!q.cat || n.c === q.cat)
+  // 副本 lists by map, not by category: an instance holds its own monsters, field mobs also spawned there and
+  // the factions' NPCs (enemies in PvP instances)
+  let inCat = (n: DbNpc) => !q.cat || n.c === q.cat;
+  if (q.cat === 'instance') {
+    const folders = new Set((q.map ? instances.filter((i) => i.key === q.map) : instances).flatMap((i) => i.maps));
+    inCat = (n) => n.c !== '' && !!n.maps?.some((w) => folders.has(w));
+  }
+  const rows = npcs.filter((n) => !n.h && inCat(n)
     && (q.lvMin === undefined || n.lv >= q.lvMin) && (q.lvMax === undefined || n.lv <= q.lvMax)
     && (!q.grades.length || q.grades.includes(npcGrade(n.g)))
     && (!s || String(n.id).startsWith(s) || n.zh.toLowerCase().includes(s) || n.en.toLowerCase().includes(s)
@@ -281,6 +291,10 @@ export function queryNpcs(q: NpcQuery) {
       grade: npcGrade(n.g), g: n.g, c: n.c, t: n.t, ai: n.ai,
       maps: n.maps?.slice(0, 3).map((w) => ({ w, zh: maps[w]?.[0] || w, en: maps[w]?.[1] || w })), more: Math.max(0, (n.maps?.length ?? 0) - 3) })),
   };
+}
+
+export function npcInstances() {
+  return loadNpcs().instances.map(({ key, zh, en, n, lvMin, lvMax, lv }) => ({ key, zh, en, n, lvMin, lvMax, lv }));
 }
 
 export function getNpc(id: number) {

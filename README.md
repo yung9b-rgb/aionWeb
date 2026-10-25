@@ -189,6 +189,7 @@ py tools/build_db_npcs.py --npcs <服务端>/Map/XML/npcs.xml --common <服务�
 - 天族 / 魔族：race_type 是 pc_light / gchief_light（或对应的 dark）的 NPC，也就是两族自己的守卫、商人、深渊驻军。
 - 命名BOSS：带 named_monster 标记，并且有专属掉落——某件装备只有它会掉（同名的不同等级版本算同一只），或者它引用了一个别的怪都不引用、里面有装备的掉落组。
 - 头目：其余带 named_monster 标记的怪。怪物：其余可攻击的 NPC。
+- 副本：只在副本（`Map/Worlds/id*`，不含测试图 idtest_dungeon）里出现的怪不分 BOSS 和小怪，单独归到「副本」；子菜单按副本列出（同名的多个版本合成一项），每项列出这个副本里的全部怪和两族 NPC。被 AI 召唤的怪算在召唤者所在的地图上。
 - "别的怪"只算真的会刷出来的：出现在 `Map/Worlds/<地图>/world.xml`，或被 `NpcAIPatterns*.xml` 的 `<npc_nameid>` 召唤。地图名取客户端的 `STR_ZONE_NAME_<地图目录名>`。
 
 ## 目录

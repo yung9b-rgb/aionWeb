@@ -70,6 +70,9 @@ select.form-control, .dataTables_wrapper select { color: #212529 !important; }
 .aa-dbmenu-sep { height: 1px; margin: 6px 0; background: #e3e6ef; }
 .aa-dbmenu li:hover > .aa-dbmenu-sub { display: block; }
 .aa-dbmenu-closed li:hover > .aa-dbmenu-sub { display: none; }
+/* long submenus (副本) open as a three-column grid */
+.aa-dbmenu li:hover > .aa-dbmenu-grid { display: grid; grid-template-columns: repeat(3, auto); }
+.aa-dbmenu-closed li:hover > .aa-dbmenu-grid { display: none; }
 .aa-db-crumb { background: transparent; padding: 0; }
 .aa-db-filter { border: 1px solid #e3e6ef; border-radius: 6px; padding: 14px 16px 6px; margin-bottom: 14px; background: #fafbfe; }
 .aa-db-frow { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin-bottom: 12px; }
