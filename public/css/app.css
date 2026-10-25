@@ -108,7 +108,10 @@ select.form-control, .dataTables_wrapper select { color: #212529 !important; }
 
 /* 静态数据库 item detail: game-tooltip style card */
 .aa-db-icon-lg { width: 64px; height: 64px; border-width: 3px; flex: none; }
-.aa-tip { background: #1d2027; color: #d6dae6; border-radius: 6px; padding: 16px 18px; font-size: .875rem; }
+.aa-tip { background: #1d2027; color: #d6dae6; border-radius: 6px; padding: 16px 18px; font-size: .875rem;
+  width: max-content; max-width: 100%; }
+/* the card is as wide as the trade-rules row on one line; other sections don't widen it, they wrap */
+.aa-tip > :not(.aa-tip-rules) { contain: inline-size; }
 .aa-tip .aa-quality-common { color: #e8ebf2; }
 .aa-tip-head { display: flex; gap: 14px; align-items: center; }
 .aa-tip-name { min-width: 0; }
