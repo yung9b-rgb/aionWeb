@@ -74,9 +74,11 @@ export function getItem(id: number) {
 
 // ---- 掉落组: data/db_dropgroups.json, built by tools/build_db_dropgroups.py (CommonDropItems.xml + npcs.xml) ----
 // weight is per roll in 1/10,000,000 at adjustment 100; a referencing NPC scales it by its common_drop_adjustment / 100.
-type DropGroup = { id: number; name: string; items: Array<[number | string, number]>; users: number; npcs: number[] };
+type DropGroup = { id: number; name: string; items: Array<[number | string, number]>; users: number; npcs: Array<[number, number]> };
+// npc id -> [internal name, Chinese, English, level]
+type NpcInfo = [string, string, string, number];
 const GROUPS_FILE = path.join(ROOT, 'data', 'db_dropgroups.json');
-let groupCache: { mtime: number; groups: DropGroup[]; byId: Map<number, DropGroup> } | null = null;
+let groupCache: { mtime: number; groups: DropGroup[]; byId: Map<number, DropGroup>; npcs: Record<string, NpcInfo> } | null = null;
 
 function loadGroups() {
   if (!fs.existsSync(GROUPS_FILE)) {
@@ -85,8 +87,9 @@ function loadGroups() {
   }
   const mtime = fs.statSync(GROUPS_FILE).mtimeMs;
   if (!groupCache || groupCache.mtime !== mtime) {
-    const groups: DropGroup[] = JSON.parse(fs.readFileSync(GROUPS_FILE, 'utf8')).groups ?? [];
-    groupCache = { mtime, groups, byId: new Map(groups.map((g) => [g.id, g])) };
+    const raw = JSON.parse(fs.readFileSync(GROUPS_FILE, 'utf8'));
+    const groups: DropGroup[] = raw.groups ?? [];
+    groupCache = { mtime, groups, byId: new Map(groups.map((g) => [g.id, g])), npcs: raw.npcs ?? {} };
   }
   return groupCache;
 }
@@ -116,7 +119,8 @@ export function queryGroups(q: { search: string; page: number; size: number; sor
 }
 
 export function getGroup(id: number) {
-  const g = loadGroups().byId.get(id);
+  const { byId: groupsById, npcs } = loadGroups();
+  const g = groupsById.get(id);
   if (!g) return null;
   const { byId } = load();
   const total = g.items.reduce((n, [, w]) => n + w, 0);
@@ -126,6 +130,12 @@ export function getGroup(id: number) {
       const it = typeof iid === 'number' ? byId.get(iid) : undefined;
       return { id: typeof iid === 'number' ? iid : 0, k: it?.k ?? String(iid), zh: it?.zh ?? '', en: it?.en ?? '', lv: it?.lv ?? 0,
         q: it?.q ?? '', ic: it?.ic, weight: w };
+    }),
+    // referencing NPCs; chance = this group's total per kill for that NPC (capped at 100%), in 1/10,000,000
+    npcs: (g.npcs ?? []).map(([nid, adj]) => {
+      const n = npcs[String(nid)];
+      return { id: nid, k: n?.[0] ?? '', zh: n?.[1] ?? '', en: n?.[2] ?? '', lv: n?.[3] ?? 0, adj,
+        chance: Math.min(total * adj / 100, 1e7) };
     }),
   };
 }

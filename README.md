@@ -174,8 +174,10 @@ py tools/build_db_icons.py --pak <客户端>/Data/Items/Items.pak
 「掉落组」页面的数据 `data/db_dropgroups.json` 从服务端的通用掉落组和 NPC 表生成（先生成物品表，组里的物品名靠它换成编号；不在仓库里）：
 
 ```bash
-py tools/build_db_dropgroups.py --common <服务端>/Map/XML/CommonDropItems.xml --npcs <服务端>/Map/XML/npcs.xml
+py tools/build_db_dropgroups.py --common <服务端>/Map/XML/CommonDropItems.xml --npcs <服务端>/Map/XML/npcs.xml --zh <客户端中文字符串> --en <客户端英文字符串>
 ```
+
+`--zh` / `--en` 用来显示引用这个组的 NPC 的名称，格式和物品缓存一样；不给时显示 NPC 的内部名。
 
 ## 目录
 

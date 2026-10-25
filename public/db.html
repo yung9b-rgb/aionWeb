@@ -367,6 +367,9 @@
     let gtimer = 0;
     const reloadGroups = (delay = 0) => { gstate.page = 1; clearTimeout(gtimer); gtimer = setTimeout(loadGroups, delay); };
 
+    // detail card: two tabs, each filtered and paged on the client (a group has at most a few thousand NPCs)
+    const gd = { g: null, tab: 'items', q: { items: '', npcs: '' }, page: { items: 1, npcs: 1 }, size: { items: 10, npcs: 10 } };
+
     async function showGroup(id) {
       const box = document.getElementById('db-detail');
       let g;
@@ -374,30 +377,107 @@
         box.innerHTML = `<div class="text-danger">${AA.esc(e.message)}</div>`; return;
       }
       if (!gstate.active || gstate.selected !== id) return;
-      const s = val('g-q').toLowerCase();       // highlight the items that matched the search
-      const hit = (it) => s && (String(it.id) === s || [it.zh, it.en, it.k].some((x) => (x || '').toLowerCase().includes(s)));
+      Object.assign(gd, { g, page: { items: 1, npcs: 1 }, q: { items: '', npcs: '' } });
       box.innerHTML = `
         <h4 class="mb-1 aa-mono" data-no-i18n>${AA.esc(g.name)}</h4>
-        <p class="text-muted small mb-3">ID ${g.id} · ${AA.t('{0} 件物品', g.items.length)} · ${AA.t('{0} 只怪引用', AA.fmtNum(g.users))}
-          · ${AA.t('组合计 {0}', pct(g.total))}</p>
-        <div class="table-responsive">
-          <table class="table table-sm aa-db-table">
-            <thead><tr><th style="width:52px"></th><th>${AA.t('物品')}</th><th style="width:50px">${AA.t('等级')}</th>
-              <th style="width:86px" title="${AA.t('掉落系数 100 时，每掷一次出这件的概率')}">${AA.t('每次概率')}</th>
-              <th style="width:76px">${AA.t('组内占比')}</th></tr></thead>
-            <tbody>${g.items.map((it) => `
-              <tr class="${hit(it) ? 'table-warning' : ''}">
-                <td><span class="aa-db-icon aa-db-icon-${AA.esc(it.q)}">${it.ic ? `<img src="icons/item/${encodeURIComponent(it.ic)}.png" alt="" loading="lazy" onerror="this.remove()">` : ''}</span></td>
-                <td data-no-i18n class="text-nowrap"><span class="aa-quality-${AA.esc(it.q)}">${AA.esc(nameOf(it))}</span>
-                  <div class="text-muted small aa-mono">${it.id || ''}</div></td>
-                <td>${it.lv || ''}</td><td class="aa-mono">${pct(it.weight)}</td>
-                <td class="aa-mono">${g.total ? (it.weight / g.total * 100).toFixed(1) + '%' : ''}</td>
-              </tr>`).join('')}</tbody>
-          </table>
+        <p class="text-muted small mb-3">ID ${g.id} · ${AA.t('组合计 {0}', pct(g.total))}</p>
+        <ul class="nav nav-tabs aa-db-tabs mb-3">
+          <li class="nav-item"><a class="nav-link" href="#" data-tab="items">${AA.t('物品内容')} <span class="badge bg-light text-dark">${g.items.length}</span></a></li>
+          <li class="nav-item"><a class="nav-link" href="#" data-tab="npcs">${AA.t('引用 NPC')} <span class="badge bg-light text-dark">${AA.fmtNum(g.npcs.length)}</span></a></li>
+        </ul>
+        <div class="aa-db-bar">
+          <div class="d-flex align-items-center gap-2">
+            <span>${AA.t('显示')}</span>
+            <select class="form-control form-control-sm" id="gd-size" style="width:auto"><option>10</option><option>20</option></select>
+            <span>${AA.t('项结果')}</span>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <span>${AA.t('搜索：')}</span>
+            <input type="text" class="form-control form-control-sm" id="gd-q" style="width:180px">
+          </div>
         </div>
-        <p class="text-muted small mb-0">${AA.t('每次概率按掉落系数 100 计算；引用这个组的怪物会再乘上自己的掉落系数 / 100。')}
-          ${g.total > 1e7 ? AA.t('这个组合计超过 100%，只配合小于 100 的掉落系数使用；系数过大时排在后面的物品会被挤掉。') : ''}</p>`;
+        <div class="aa-db-bar">
+          <span class="text-muted" id="gd-summary"></span>
+          <nav><ul class="pagination pagination-sm mb-0" id="gd-pager"></ul></nav>
+        </div>
+        <div class="table-responsive"><table class="table table-sm aa-db-table"><thead id="gd-head"></thead><tbody id="gd-body"></tbody></table></div>
+        <p class="text-muted small mb-0" id="gd-note"></p>`;
+      renderGroupTab();
     }
+
+    function renderGroupTab() {
+      const g = gd.g, tab = gd.tab;
+      if (!g) return;
+      document.querySelectorAll('#db-detail [data-tab]').forEach((a) => a.classList.toggle('active', a.dataset.tab === tab));
+      const qIn = document.getElementById('gd-q'), sizeIn = document.getElementById('gd-size');
+      qIn.placeholder = tab === 'items' ? AA.t('物品名称或 ID') : AA.t('NPC 名称或 ID');
+      qIn.value = gd.q[tab];
+      sizeIn.value = String(gd.size[tab]);
+      const s = gd.q[tab].trim().toLowerCase();
+      const match = (x) => !s || String(x.id) === s || String(x.id).startsWith(s) || [x.zh, x.en, x.k].some((v) => (v || '').toLowerCase().includes(s));
+      const all = tab === 'items' ? g.items : g.npcs;
+      const rows = all.filter(match);
+      const size = gd.size[tab], pages = Math.max(1, Math.ceil(rows.length / size));
+      const page = gd.page[tab] = Math.min(Math.max(gd.page[tab], 1), pages);
+      const view = rows.slice((page - 1) * size, page * size);
+      // highlight items found by the group-list search on the left
+      const ls = val('g-q').toLowerCase();
+      const hit = (it) => ls && (String(it.id) === ls || [it.zh, it.en, it.k].some((x) => (x || '').toLowerCase().includes(ls)));
+      if (tab === 'items') {
+        document.getElementById('gd-head').innerHTML = `<tr><th style="width:52px"></th><th>${AA.t('物品')}</th><th style="width:50px">${AA.t('等级')}</th>
+          <th style="width:86px" title="${AA.t('掉落系数 100 时，每掷一次出这件的概率')}">${AA.t('每次概率')}</th><th style="width:76px">${AA.t('组内占比')}</th></tr>`;
+        document.getElementById('gd-body').innerHTML = view.map((it) => `
+          <tr class="${hit(it) ? 'table-warning' : ''}">
+            <td><span class="aa-db-icon aa-db-icon-${AA.esc(it.q)}">${it.ic ? `<img src="icons/item/${encodeURIComponent(it.ic)}.png" alt="" loading="lazy" onerror="this.remove()">` : ''}</span></td>
+            <td data-no-i18n class="text-nowrap"><span class="aa-quality-${AA.esc(it.q)}">${AA.esc(nameOf(it))}</span><div class="text-muted small aa-mono">${it.id || ''}</div></td>
+            <td>${it.lv || ''}</td><td class="aa-mono">${pct(it.weight)}</td>
+            <td class="aa-mono">${g.total ? (it.weight / g.total * 100).toFixed(1) + '%' : ''}</td>
+          </tr>`).join('') || `<tr><td colspan="5" class="text-muted text-center py-3">${AA.t('没有符合条件的物品')}</td></tr>`;
+        document.getElementById('gd-note').textContent = AA.t('每次概率按掉落系数 100 计算；引用这个组的怪物会再乘上自己的掉落系数 / 100。')
+          + (g.total > 1e7 ? ' ' + AA.t('这个组合计超过 100%，只配合小于 100 的掉落系数使用；系数过大时排在后面的物品会被挤掉。') : '');
+      } else {
+        document.getElementById('gd-head').innerHTML = `<tr><th style="width:90px">ID</th><th>${AA.t('NPC')}</th><th style="width:50px">${AA.t('等级')}</th>
+          <th style="width:86px" title="${AA.t('npcs.xml 的 common_drop_adjustment，100 = 原值')}">${AA.t('掉落系数')}</th>
+          <th style="width:96px" title="${AA.t('击杀一次，这个组出一件的概率')}">${AA.t('本组概率')}</th></tr>`;
+        document.getElementById('gd-body').innerHTML = view.map((n) => `
+          <tr><td class="aa-mono">${n.id}</td>
+            <td data-no-i18n class="text-nowrap">${AA.esc(AA.lang === 'en' ? (n.en || n.k) : (n.zh || n.k))}<div class="text-muted small aa-mono">${AA.esc(n.k)}</div></td>
+            <td>${n.lv || ''}</td><td class="aa-mono">${n.adj}</td><td class="aa-mono">${pct(n.chance)}</td></tr>`).join('')
+          || `<tr><td colspan="5" class="text-muted text-center py-3">${all.length ? AA.t('没有符合条件的 NPC') : AA.t('没有 NPC 引用这个组')}</td></tr>`;
+        document.getElementById('gd-note').textContent = AA.t('本组概率 = 组合计 × 掉落系数 / 100（最高 100%），是击杀一次这个组出一件的概率。');
+      }
+      const from = rows.length ? (page - 1) * size + 1 : 0, to = Math.min(rows.length, page * size);
+      document.getElementById('gd-summary').textContent = AA.t('第 {0} 至 {1} 项，共 {2} 项', from, to, AA.fmtNum(rows.length));
+      renderPager(page, pages, 'gd-pager');
+    }
+
+    // detail card events (the card's content is replaced, so listen on the card itself)
+    const detail = document.getElementById('db-detail');
+    detail.addEventListener('click', (e) => {
+      if (!gstate.active || !gd.g) return;
+      const t = e.target.closest('[data-tab]');
+      if (t) { e.preventDefault(); gd.tab = t.dataset.tab; renderGroupTab(); return; }
+      const a = e.target.closest('#gd-pager [data-page]');
+      if (a) {
+        e.preventDefault();
+        const n = +a.dataset.page;
+        if (!n || a.parentElement.classList.contains('disabled') || a.parentElement.classList.contains('active')) return;
+        gd.page[gd.tab] = n; renderGroupTab();
+      }
+    });
+    let gdtimer = 0;
+    detail.addEventListener('input', (e) => {
+      if (e.target.id !== 'gd-q') return;
+      gd.q[gd.tab] = e.target.value; gd.page[gd.tab] = 1;
+      clearTimeout(gdtimer); gdtimer = setTimeout(() => {
+        renderGroupTab();
+        const q = document.getElementById('gd-q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length);
+      }, 250);
+    });
+    detail.addEventListener('change', (e) => {
+      if (e.target.id !== 'gd-size') return;
+      gd.size[gd.tab] = +e.target.value; gd.page[gd.tab] = 1; renderGroupTab();
+    });
 
     document.getElementById('g-head').addEventListener('click', (e) => {
       const th = e.target.closest('[data-sort]'); if (!th) return;
