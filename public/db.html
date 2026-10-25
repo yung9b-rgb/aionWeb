@@ -50,23 +50,22 @@
   <script src="js/hoverable-collapse.js"></script>
   <script src="js/template.js"></script>
   <script>
-    // Category tree. Item branch copied from Aion Codex (cn1) Items menu, minus 自定义 / 设置物 (housing, later versions).
+    // Category tree. Item branch copied from Aion Codex (cn1) Items menu, minus 自定义 / 设置物 (housing) and the
+    // post-2.7 weapons (chainsword, gauntlet, dimsword) and classes (thunderer, battlemaster, lumines, runeblade).
     // Each node: [key, title, children?]. The route is the key path, e.g. #item/armor/chain/chest.
-    const CLASSES12 = [['fighter', '剑星'], ['knight', '守护星'], ['assassin', '杀星'], ['ranger', '弓星'], ['wizard', '魔道星'],
-      ['elementalist', '精灵星'], ['priest', '治愈星'], ['chanter', '护法星'], ['thunderer', 'Thunderer'], ['battlemaster', 'Battlemaster'],
-      ['lumines', 'Lumines'], ['runeblade', 'Runeblade']];
+    const CLASSES8 = [['fighter', '剑星'], ['knight', '守护星'], ['assassin', '杀星'], ['ranger', '弓星'], ['wizard', '魔道星'],
+      ['elementalist', '精灵星'], ['priest', '治愈星'], ['chanter', '护法星']];
     const PARTS = [['chest', '上衣'], ['hands', '装甲'], ['shoulders', '护肩'], ['legs', '下衣'], ['feet', '鞋']];
     const TREE = [
       ['item', '物品', [
         ['weapon', '武器', [['sword', '长剑'], ['dagger', '短剑'], ['mace', '权杖'], ['orb', '宝珠'], ['grimoire', '法典'],
-          ['2h_sword', '巨剑'], ['polearm', '战戟'], ['staff', '法杖'], ['bow', '弓'],
-          ['chainsword', 'Chainsword'], ['gauntlet', 'Gauntlet'], ['dimsword', 'Dimsword']]],
+          ['2h_sword', '巨剑'], ['polearm', '战戟'], ['staff', '法杖'], ['bow', '弓']]],
         ['armor', '防具', [['cloth', '衣服', PARTS], ['robe', '布甲', PARTS], ['leather', '皮甲', PARTS], ['chain', '链甲', PARTS],
           ['plate', '金属', PARTS], ['shield', '盾牌']]],
         ['accessory', '饰品', [['headgear', '头饰'], ['earring', '耳环'], ['necklace', '项链'], ['ring', '戒指'], ['belt', '腰带']]],
         ['wing', '翅膀'],
         '-',
-        ['skillrelated', '技能相关', [['stigma', '烙印', CLASSES12], ['book', '技能书', CLASSES12]]],
+        ['skillrelated', '技能相关', [['stigma', '烙印', CLASSES8], ['book', '技能书', CLASSES8]]],
         ['making', '制作', [
           ['material', '材料', [['gather', '采集'], ['drop', '获得'], ['part', '部件']]],
           ['recipes', '图案', [['weaponsmith', '武器制作'], ['armorsmith', '金属盔甲制作'], ['tailoring', '裁缝'], ['handiwork', '手工'],
