@@ -180,12 +180,12 @@
 
     function headHtml() {
       return `<tr><th style="width:100px">ID</th><th style="width:52px"></th><th>${AA.t('物品名称')}</th><th style="width:64px">${AA.t('等级')}</th>
-        <th style="width:72px">${AA.t('魔石孔')}</th></tr>`;
+        </tr>`;
     }
 
     function renderItems(route) {
       document.getElementById('t-head').innerHTML = headHtml();
-      document.getElementById('t-body').innerHTML = `<tr><td colspan="5" class="text-muted text-center py-4">${AA.t('物品数据还没接入（分类 {0}）', AA.esc(route))}</td></tr>`;
+      document.getElementById('t-body').innerHTML = `<tr><td colspan="4" class="text-muted text-center py-4">${AA.t('物品数据还没接入（分类 {0}）', AA.esc(route))}</td></tr>`;
       document.getElementById('f-summary').textContent = AA.t('共 {0} 项', 0);
       document.getElementById('f-pager').innerHTML = `<li class="page-item disabled"><a class="page-link">${AA.t('上一页')}</a></li>
         <li class="page-item active"><a class="page-link">1</a></li><li class="page-item disabled"><a class="page-link">${AA.t('下一页')}</a></li>`;
@@ -234,8 +234,14 @@
       const isItem = path[0] && path[0][0] === 'item';
       document.getElementById('db-items').classList.toggle('d-none', !isItem);
       document.getElementById('db-empty').classList.toggle('d-none', isItem);
-      if (isItem) renderItems(path.map((n) => n[0]).join('/'));
+      if (isItem) {
+        renderItems(path.map((n) => n[0]).join('/'));
+        showStats(!NON_GEAR.includes(path[1] && path[1][0]));
+      }
     }
+    // 技能相关 / 制作 / 消耗品 are ordinary items, not gear: no 附加属性 filter there
+    const NON_GEAR = ['skillrelated', 'making', 'consumable'];
+    const showStats = (on) => ['f-stats-toggle', 'f-stats'].forEach((id) => { document.getElementById(id).style.display = on ? '' : 'none'; });
     window.addEventListener('hashchange', render);
     render();
   </script>
