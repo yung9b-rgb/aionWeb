@@ -5,7 +5,8 @@ usage:
   py tools/build_db_items.py --items <server items.xml> [--zh <Chinese strings>] [--en <English strings>] [--out <file>]
 
 Arguments are the same as tools/build_items_cache.py (see there), plus --client <client>/Data/Items/Items.pak (or its
-client_items.xml), which gives each item its icon name ("ic"; the PNGs come from tools/build_db_icons.py). Each item gets its menu categories (the route keys
+client_items.xml), which gives each item its icon name ("ic"; the PNGs come from tools/build_db_icons.py) and
+its long description. Every item's full field list also goes to data/db_items_raw.ndjson for the detail page. Each item gets its menu categories (the route keys
 used by public/db.html, e.g. armor/chain/chest), level, quality, race and bonus stats. Restart the admin after
 rebuilding the file.
 
@@ -118,10 +119,12 @@ def client_icons(src):
             text = decode(z.read(n))
     else:
         text = decode(open(src, 'rb').read())
-    out = {}
+    out = {}                                  # id -> (icon name, desc_long string key)
     for blk in re.findall(r'<client_item>(.*?)</client_item>', text, re.S):
-        i, ic = re.search(r'<id>(\d+)</id>', blk), re.search(r'<icon_name>([^<]+)</icon_name>', blk)
-        if i and ic: out[i.group(1)] = ic.group(1).strip().lower()
+        i = re.search(r'<id>(\d+)</id>', blk)
+        if not i: continue
+        ic, dl = re.search(r'<icon_name>([^<]+)</icon_name>', blk), re.search(r'<desc_long>([^<]+)</desc_long>', blk)
+        out[i.group(1)] = (ic.group(1).strip().lower() if ic else '', dl.group(1).strip().upper() if dl else '')
     return out
 
 
@@ -132,11 +135,13 @@ def main():
     ap.add_argument('--en')
     ap.add_argument('--client', help='client Data/Items/Items.pak (ZIP format) or client_items.xml, for icon names')
     ap.add_argument('--out', default=os.path.join(HERE, '..', 'data', 'db_items.json'))
+    ap.add_argument('--raw-out', default=os.path.join(HERE, '..', 'data', 'db_items_raw.ndjson'),
+                    help="every item's full field list, one JSON object per line (the detail page reads it by id)")
     a = ap.parse_args()
     if not a.zh and not a.en: ap.error('give --zh and/or --en')
     zh, en = strings(a.zh), strings(a.en)
     icons = client_icons(a.client)
-    rows = []
+    rows, raws = [], []
     for x in re.findall(r'<item>(.*?)</item>', decode(open(a.items, 'rb').read()), re.S):
         f = {k: html.unescape(v) for k, v in re.findall(r'<(\w+)>([^<]*)</\1>', x)}
         if 'id' not in f: continue
@@ -145,7 +150,11 @@ def main():
         race = 2 if ('pc_light' in rp and 'pc_dark' in rp) else 0 if 'pc_light' in rp else 1 if 'pc_dark' in rp else 2
         r = dict(id=int(f['id']), k=name, zh=zh.get(key, ''), en=en.get(key, ''),
                  lv=int(f.get('level', '0') or 0), q=f.get('quality', 'common').lower(), race=race, c=categories(f))
-        if icons.get(f['id']): r['ic'] = icons[f['id']]
+        ic, dl = icons.get(f['id'], ('', ''))
+        if ic: r['ic'] = ic
+        raw = {'id': r['id'], 'f': f}
+        if dl and (zh.get(dl) or en.get(dl)): raw['dl'] = {'zh': zh.get(dl, ''), 'en': en.get(dl, '')}
+        raws.append(raw)
         st = parse_stats(f)
         if st: r['st'] = st
         if re.match(r'(npc_|test)', name.lower()) or '_test' in name.lower(): r['h'] = 1
@@ -157,6 +166,10 @@ def main():
     tmp = a.out + '.tmp'
     with open(tmp, 'w', encoding='utf-8') as fp: json.dump(out, fp, ensure_ascii=False, separators=(',', ':'))
     os.replace(tmp, a.out)
+    raws.sort(key=lambda x: x['id'])
+    with open(a.raw_out + '.tmp', 'w', encoding='utf-8', newline='\n') as fp:
+        for x in raws: fp.write(json.dumps(x, ensure_ascii=False, separators=(',', ':')) + '\n')
+    os.replace(a.raw_out + '.tmp', a.raw_out)
     from collections import Counter
     cats = Counter(c.split('/')[0] for r in rows for c in r['c'])
     print(f'{len(rows)} items -> {os.path.abspath(a.out)}; {sum(1 for r in rows if r["zh"])} Chinese names; '

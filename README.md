@@ -163,6 +163,7 @@ py tools/build_db_items.py --items <服务端>/Map/XML/L10N/items.xml --zh <客�
 - 每个物品按官方物品编号段分到页面菜单的分类里（长剑、链甲上衣、魔石……）；烙印和技能书按可用职业分。
 - 附加属性来自 `bonus_attr1..12`；NPC 专用和测试物品会标成隐藏，列表默认不显示。
 - 加上 `--client <客户端>/Data/Items/Items.pak` 会同时记下每个物品的图标名。
+- 同时写出 `data/db_items_raw.ndjson`（约 60 MB，也不在仓库里）：每行一件物品在 items.xml 里的全部字段和客户端长说明，物品详情页按 ID 只读需要的那一行。
 - 重新生成后不用重启后台，下次查询会自动读新文件。
 
 物品图标从自己客户端的 `Data/Items/Items.pak`（标准 ZIP 格式）里导出成 PNG，放到 `public/icons/item/`（不在仓库里；需要 Pillow）：

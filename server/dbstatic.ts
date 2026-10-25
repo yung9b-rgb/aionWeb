@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT } from './config.ts';
 import { LError } from './i18n.ts';
+import { baseSlots, maxEnchant, isGear, type ItemInfo } from './items.ts';
 
 export type DbItem = {
   id: number; k: string; zh: string; en: string; lv: number; q: string;
@@ -66,10 +67,67 @@ export function queryItems(q: ItemQuery) {
   };
 }
 
+// Full field list per item: data/db_items_raw.ndjson (one JSON object per line, written by build_db_items.py).
+// Only a byte-offset index is kept in memory; each detail request reads its one line.
+const RAW_FILE = path.join(ROOT, 'data', 'db_items_raw.ndjson');
+let rawIndex: { mtime: number; at: Map<number, [number, number]> } | null = null;
+
+function rawLine(id: number): any | null {
+  if (!fs.existsSync(RAW_FILE)) return null;
+  const mtime = fs.statSync(RAW_FILE).mtimeMs;
+  if (!rawIndex || rawIndex.mtime !== mtime) {
+    const buf = fs.readFileSync(RAW_FILE);
+    const at = new Map<number, [number, number]>();
+    for (let pos = 0; pos < buf.length;) {
+      let end = buf.indexOf(10, pos);
+      if (end < 0) end = buf.length;
+      const m = /^\{"id":(\d+)/.exec(buf.toString('latin1', pos, Math.min(pos + 24, end)));
+      if (m) at.set(Number(m[1]), [pos, end - pos]);
+      pos = end + 1;
+    }
+    rawIndex = { mtime, at };
+  }
+  const loc = rawIndex.at.get(id);
+  if (!loc) return null;
+  const fd = fs.openSync(RAW_FILE, 'r');
+  try {
+    const b = Buffer.alloc(loc[1]);
+    fs.readSync(fd, b, 0, loc[1], loc[0]);
+    return JSON.parse(b.toString('utf8'));
+  } finally { fs.closeSync(fd); }
+}
+
+const truthy = (v: string | undefined) => v !== undefined && /^(true|1)$/i.test(v.trim());
+
 export function getItem(id: number) {
-  const { byId, labels } = load();
+  const { byId, items, labels } = load();
   const it = byId.get(id);
-  return it ? { ...it, statLabels: Object.fromEntries(Object.keys(it.st ?? {}).map((k) => [k, labels[k] ?? k])) } : null;
+  if (!it) return null;
+  const raw = rawLine(id);
+  const f: Record<string, string> = raw?.f ?? {};
+  // manastone sockets and max enchant, same rules as the mail / shop editor (items.ts)
+  const info = { quality: it.q, item_type: f.item_type ?? 'normal', slot_bonus: Number(f.option_slot_bonus ?? 0) || 0,
+    no_enchant: truthy(f.no_enchant) } as ItemInfo;
+  const gear = isGear(id);
+  const slots = baseSlots(id, info);
+  // bonus stats in file order, with labels
+  const bonus = Object.keys(f).filter((k) => /^bonus_attr\d+$/.test(k)).sort((a, b) => Number(a.slice(10)) - Number(b.slice(10)))
+    .map((k) => /^\s*([A-Za-z_]+)\s+(-?[\d.]+%?)/.exec(f[k])).filter(Boolean)
+    .map((m) => { const key = m![1].toLowerCase().replace('magical_resist', 'magicalresist'); return { key, label: labels[key] ?? m![1], value: m![2] }; });
+  // names of items referenced by the record (currencies, trade-ins)
+  const byKey = new Map(items.map((x) => [x.k.toLowerCase(), x]));
+  const ref = (name: string | undefined) => {
+    if (!name) return null;
+    const r = byKey.get(name.toLowerCase());
+    return { k: name, id: r?.id ?? 0, zh: r?.zh ?? '', en: r?.en ?? '', q: r?.q ?? '', ic: r?.ic };
+  };
+  return {
+    ...it, statLabels: Object.fromEntries(Object.keys(it.st ?? {}).map((k) => [k, labels[k] ?? k])),
+    f, desc: raw?.dl ?? null, bonus,
+    gear, slots: { base: slots, extra: gear ? Math.max(0, Math.min(info.slot_bonus, 6 - slots)) : 0 },
+    maxEnchant: maxEnchant(id, info),
+    refs: { abyssItem: ref(f.abyss_item), extraCurrency: ref(f.extra_currency_item), tradeIn: ref(f.trade_in_item) },
+  };
 }
 
 // ---- 掉落组: data/db_dropgroups.json, built by tools/build_db_dropgroups.py (CommonDropItems.xml + npcs.xml) ----

@@ -276,7 +276,10 @@
 
     function renderItems(route) {
       const cat = route.replace(/^item\/?/, '');
-      if (cat !== state.cat) { state.cat = cat; state.selected = 0; }
+      if (cat !== state.cat) {
+        state.cat = cat; state.selected = 0; ist.it = null;
+        document.getElementById('db-detail').innerHTML = DETAIL_EMPTY;
+      }
       reload();
     }
 
@@ -299,12 +302,13 @@
       if (!n || a.parentElement.classList.contains('disabled') || a.parentElement.classList.contains('active')) return;
       state.page = n; load();
     });
-    // row click selects the item; the detail card on the right will show it (to be built)
+    // row click selects the item and shows it in the detail card on the right
     document.getElementById('t-body').addEventListener('click', (e) => {
       const tr = e.target.closest('tr[data-id]'); if (!tr) return;
       state.selected = +tr.dataset.id;
       document.querySelectorAll('#t-body tr.table-active').forEach((x) => x.classList.remove('table-active'));
       tr.classList.add('table-active');
+      showItem(state.selected);
     });
     // 附加属性 is collapsed by default; the header shows how many are selected
     function statsCount() {
@@ -323,6 +327,162 @@
       document.querySelectorAll('#f-quality input').forEach((x) => { x.checked = false; });
       state.races.clear(); state.qualities.clear(); state.stats.clear();
       statsCount(); reload();
+    });
+
+    // ---- 物品详情: /api/db/items/:id -> tooltip-style 属性 tab + 原始数据 tab (every items.xml field) ----
+    const ist = { it: null, tab: 'info', seq: 0 };
+    const yes = (v) => v !== undefined && /^(true|1)$/i.test(String(v).trim());
+    const num = (v) => Number(v ?? 0) || 0;
+    const RACE_NAME = ['天族', '魔族', '通用'];
+    const GENDER = { all: '通用', male: '仅男性', female: '仅女性' };
+    // type line from the menu routes; items filed under several classes (stigma, skill books) show the common part
+    function typeOf(it) {
+      if (!it.c || !it.c.length) return '';
+      let parts = it.c[0].split('/');
+      for (const c of it.c.slice(1)) { const o = c.split('/'); let n = 0; while (n < parts.length && parts[n] === o[n]) n++; parts = parts.slice(0, n); }
+      return resolve('item/' + parts.join('/')).slice(1).map((n) => AA.t(n[1])).join(' · ');
+    }
+    // minutes -> 14 天 / 3 小时 / 30 分钟
+    const minutes = (m) => (m >= 1440 && m % 1440 < 60 ? Math.floor(m / 1440) + ' ' + AA.t('天') : m >= 60 && m % 60 === 0 ? m / 60 + ' ' + AA.t('小时') : AA.fmtNum(m) + ' ' + AA.t('分钟'));
+    const iconBox = (q, ic, big) => `<span class="aa-db-icon aa-db-icon-${AA.esc(q)}${big ? ' aa-db-icon-lg' : ''}">${ic ? `<img src="icons/item/${encodeURIComponent(ic)}.png" alt="" onerror="this.remove()">` : ''}</span>`;
+    const refName = (r) => (r.id ? `<span class="aa-quality-${AA.esc(r.q)}" data-no-i18n>${AA.esc(nameOf(r))}</span>` : `<span class="aa-mono">${AA.esc(r.k)}</span>`);
+    const kv = (rows) => rows.filter(Boolean).map(([k, v, cls]) => `<div class="aa-tip-kv${cls ? ' ' + cls : ''}"><span>${AA.t(k)}</span><b>${v}</b></div>`).join('');
+    const sec = (title, body) => (body ? `<div class="aa-tip-sec">${title ? `<div class="aa-tip-title">${AA.t(title)}</div>` : ''}${body}</div>` : '');
+
+    async function showItem(id) {
+      const box = document.getElementById('db-detail');
+      const seq = ++ist.seq;
+      let it;
+      try { it = await AA.api('GET', '/api/db/items/' + id); } catch (e) {
+        if (seq === ist.seq) box.innerHTML = `<div class="text-danger">${AA.esc(e.message)}</div>`;
+        return;
+      }
+      if (seq !== ist.seq || state.selected !== id || gstate.active) return;
+      ist.it = it;
+      box.innerHTML = `
+        <ul class="nav nav-tabs aa-db-tabs mb-3">
+          <li class="nav-item"><a class="nav-link" href="#" data-itab="info">${AA.t('属性')}</a></li>
+          <li class="nav-item"><a class="nav-link" href="#" data-itab="raw">${AA.t('原始数据')} <span class="badge bg-light text-dark">${Object.keys(it.f).length}</span></a></li>
+        </ul>
+        <div id="it-body"></div>`;
+      renderItemTab();
+    }
+
+    function renderItemTab() {
+      const it = ist.it; if (!it) return;
+      document.querySelectorAll('#db-detail [data-itab]').forEach((a) => a.classList.toggle('active', a.dataset.itab === ist.tab));
+      document.getElementById('it-body').innerHTML = ist.tab === 'raw' ? itemRaw(it) : itemInfo(it);
+    }
+
+    function itemInfo(it) {
+      const f = it.f, q = QUALITIES.find(([k]) => k === it.q);
+      // base stats by kind: weapon / shield / armor
+      let base = '';
+      if (f.weapon_type) {
+        base = kv([
+          ['攻击力', `${num(f.min_damage)} - ${num(f.max_damage)}`],
+          ['攻击速度', (num(f.attack_delay) / 1000).toFixed(1)],
+          num(f.hit_accuracy) && ['命中', num(f.hit_accuracy)],
+          num(f.critical) && ['物理致命一击', num(f.critical)],
+          num(f.parry) && ['招架', num(f.parry)],
+          num(f.magical_skill_boost) && ['魔法增幅', num(f.magical_skill_boost)],
+          num(f.magical_hit_accuracy) && ['魔法命中', num(f.magical_hit_accuracy)],
+          num(f.attack_range) && ['攻击距离', `${+num(f.attack_range).toFixed(1)} m`],
+        ]);
+      } else if (f.block !== undefined || f.damage_reduce !== undefined) {
+        base = kv([
+          ['格挡', num(f.block)], ['伤害减少', num(f.damage_reduce) + '%'],
+          num(f.reduce_max) && ['减少上限', num(f.reduce_max)],
+        ]);
+      } else if (f.armor_type || f.physical_defend !== undefined) {
+        base = kv([
+          f.physical_defend !== undefined && ['物理防御', num(f.physical_defend)],
+          f.magical_resist !== undefined && ['魔法抵抗', num(f.magical_resist)],
+          num(f.dodge) && ['回避', num(f.dodge)],
+        ]);
+      }
+      const bonus = kv(it.bonus.map((x) => [x.label, (/^-/.test(x.value) ? '' : '+') + x.value, 'aa-tip-bonus']));
+      // usable classes: the eight leaf classes, 0 = cannot use, else the minimum level
+      const cls = CLASSES8.map(([k, t]) => [t, num(f[k])]);
+      const usable = cls.filter(([, lv]) => lv > 0);
+      const classLine = !usable.length ? AA.t('无')
+        : usable.length === cls.length && usable.every(([, lv]) => lv === usable[0][1]) ? AA.t('全部职业')
+        : usable.map(([t, lv]) => AA.t(t) + (lv !== it.lv ? ` <span class="aa-tip-dim">${lv}</span>` : '')).join('、');
+      const sockets = it.gear && (it.slots.base || it.slots.extra)
+        ? `${it.slots.base}` + (it.slots.extra ? ` <span class="aa-tip-dim">(+${it.slots.extra} ${AA.t('额外')})</span>` : '') : '';
+      const enchant = it.gear ? (it.maxEnchant ? '+' + it.maxEnchant : AA.t('不可强化')) : '';
+      const rules = [
+        [yes(f.can_exchange), '可交易'], [yes(f.can_sell_to_npc), '可出售给 NPC'],
+        [yes(f.can_deposit_to_character_warehouse), '个人仓库'], [yes(f.can_deposit_to_account_warehouse), '账号仓库'],
+        [yes(f.can_deposit_to_guild_warehouse), '军团仓库'],
+      ].map(([on, t]) => `<span class="aa-tip-flag${on ? ' on' : ''}"><i class="mdi ${on ? 'mdi-check' : 'mdi-close'}"></i>${AA.t(t)}</span>`).join('');
+      const tags = [
+        yes(f.lore) && '唯一（只能持有一个）', yes(f.soul_bind) && '可灵魂刻印',
+        yes(f.can_composite_weapon) && '可合成', yes(f.can_proc_enchant) && '可镶嵌神石',
+        yes(f.can_dye) && '可染色',
+        it.gear && f.cannot_changeskin !== undefined && !yes(f.cannot_changeskin) && '可变更外观',
+        it.gear && yes(f.breakable) && '可分解', yes(f.cash_item) && '商城物品',
+        yes(f.remove_when_logout) && '下线后消失', yes(f.no_loot_public) && '不能公共拾取',
+      ].filter(Boolean).map((t) => `<span class="aa-tip-tag">${AA.t(t)}</span>`).join('');
+      const prices = kv([
+        num(f.price) && ['NPC 售价', `${AA.fmtNum(f.price)} ${AA.t('基纳')}`],
+        num(f.abyss_point) && ['深渊点数', AA.fmtNum(f.abyss_point)],
+        it.refs.abyssItem && ['深渊物品', `${refName(it.refs.abyssItem)} × ${AA.fmtNum(num(f.abyss_item_count))}`],
+        it.refs.extraCurrency && ['额外货币', `${refName(it.refs.extraCurrency)} × ${AA.fmtNum(num(f.extra_currency_item_count))}`],
+        it.refs.tradeIn && ['兑换物品', `${refName(it.refs.tradeIn)} × ${AA.fmtNum(num(f.trade_in_item_count))}`],
+      ]);
+      const skill = (s) => `<span class="aa-mono">${AA.esc(s)}</span>`;
+      const use = kv([
+        f.activation_skill && ['使用效果', skill(f.activation_skill) + (num(f.activation_level) > 1 ? ` Lv${num(f.activation_level)}` : '')],
+        f.skill_to_learn && ['学习技能', skill(f.skill_to_learn)],
+        f.gain_skill1 && ['获得技能', `${skill(f.gain_skill1)} Lv${num(f.gain_level1)}`
+          + (f.gain_skill2 ? `、${skill(f.gain_skill2)} Lv${num(f.gain_level2)}` : '')],
+        num(f.require_shard) && ['消耗烙印石', num(f.require_shard)],
+        num(f.casting_delay) && ['施放时间', (num(f.casting_delay) / 1000) + ' s'],
+        num(f.use_delay) && ['冷却时间', (num(f.use_delay) / 1000) + ' s'],
+        f.activation_skill && num(f.activation_count) > 0 && ['使用次数', num(f.activation_count)],
+        num(f.expire_time) && ['使用期限', minutes(num(f.expire_time))],
+        num(f.cash_available_minute) && ['可用时间', minutes(num(f.cash_available_minute))],
+        num(f.max_stack_count) > 1 && ['最大堆叠', AA.fmtNum(f.max_stack_count)],
+      ]);
+      const desc = it.desc ? (AA.lang === 'en' ? (it.desc.en || it.desc.zh) : (it.desc.zh || it.desc.en)) : '';
+      return `<div class="aa-tip">
+        <div class="aa-tip-head">
+          ${iconBox(it.q, it.ic, true)}
+          <div class="aa-tip-name">
+            <div class="aa-quality-${AA.esc(it.q)} aa-tip-title-name" data-no-i18n>${AA.esc(nameOf(it))}</div>
+            <div class="aa-tip-dim">${AA.esc(typeOf(it))}</div>
+            <div class="aa-tip-dim aa-mono">${it.id} · ${AA.esc(it.k)}</div>
+          </div>
+        </div>
+        ${sec('', kv([
+          ['等级', it.lv], ['品质', `<span class="aa-quality-${AA.esc(it.q)}">${AA.t(q ? q[1] : it.q)}</span>`],
+          ['种族', AA.t(RACE_NAME[it.race] ?? '')],
+          f.gender_permitted && f.gender_permitted !== 'all' && ['性别', AA.t(GENDER[f.gender_permitted] ?? f.gender_permitted)],
+          ['可用职业', classLine],
+        ]))}
+        ${sec('基本属性', base)}
+        ${sec('附加属性', bonus)}
+        ${sec('强化', kv([sockets && ['魔石孔', sockets], enchant && ['最高强化', enchant]]))}
+        ${sec('使用', use)}
+        ${desc ? `<div class="aa-tip-sec aa-tip-desc" data-no-i18n>${AA.esc(desc)}</div>` : ''}
+        ${sec('价格', prices)}
+        ${tags ? `<div class="aa-tip-sec">${tags}</div>` : ''}
+        <div class="aa-tip-sec aa-tip-rules">${rules}</div>
+      </div>`;
+    }
+
+    function itemRaw(it) {
+      return `<div class="table-responsive"><table class="table table-sm aa-db-table aa-db-raw"><tbody>
+        ${Object.entries(it.f).map(([k, v]) => `<tr><td class="aa-mono text-muted">${AA.esc(k)}</td><td class="aa-mono" data-no-i18n>${AA.esc(v)}</td></tr>`).join('')}
+      </tbody></table></div>
+      <p class="text-muted small mb-0">${AA.t('服务端 items.xml 里这件物品的全部字段，按文件中的顺序。')}</p>`;
+    }
+
+    document.getElementById('db-detail').addEventListener('click', (e) => {
+      const t = e.target.closest('[data-itab]');
+      if (!t || gstate.active || !ist.it) return;
+      e.preventDefault(); ist.tab = t.dataset.itab; renderItemTab();
     });
 
     // ---- 掉落组 ----

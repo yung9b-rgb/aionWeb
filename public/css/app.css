@@ -105,3 +105,26 @@ select.form-control, .dataTables_wrapper select { color: #212529 !important; }
 .aa-db-sort { cursor: pointer; user-select: none; white-space: nowrap; }
 .aa-db-sort .mdi { color: #b5bac6; }
 .aa-db-sort:hover .mdi, .aa-db-sort.on .mdi { color: #4d83ff; }
+
+/* 静态数据库 item detail: game-tooltip style card */
+.aa-db-icon-lg { width: 64px; height: 64px; border-width: 3px; flex: none; }
+.aa-tip { background: #1d2027; color: #d6dae6; border-radius: 6px; padding: 16px 18px; font-size: .875rem; }
+.aa-tip .aa-quality-common { color: #e8ebf2; }
+.aa-tip-head { display: flex; gap: 14px; align-items: center; }
+.aa-tip-name { min-width: 0; }
+.aa-tip-title-name { font-size: 1.15rem; font-weight: 600; margin-bottom: 2px; }
+.aa-tip-dim { color: #8b92a3; font-size: .8rem; }
+.aa-tip-sec { border-top: 1px solid #343944; margin-top: 12px; padding-top: 10px; }
+.aa-tip-title { color: #e0a100; font-size: .78rem; margin-bottom: 4px; }
+.aa-tip-kv { display: flex; justify-content: space-between; gap: 12px; line-height: 1.7; }
+.aa-tip-kv > span { color: #a3a9b6; white-space: nowrap; }
+.aa-tip-kv > b { font-weight: 500; text-align: right; }
+.aa-tip-bonus > b { color: #4fd18b; }
+.aa-tip-desc { color: #c9b98a; white-space: pre-line; }
+.aa-tip-tag { display: inline-block; background: #2b2f38; border-radius: 3px; padding: 1px 8px; margin: 0 6px 6px 0; font-size: .78rem; }
+.aa-tip-rules { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .78rem; }
+.aa-tip-flag { color: #6c7383; }
+.aa-tip-flag.on { color: #c3c8d4; }
+.aa-tip-flag .mdi { margin-right: 2px; }
+.aa-tip-flag.on .mdi { color: #4fd18b; }
+.aa-db-raw td:first-child { width: 45%; }
