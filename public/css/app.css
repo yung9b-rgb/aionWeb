@@ -80,7 +80,11 @@ select.form-control, .dataTables_wrapper select { color: #212529 !important; }
 .aa-db-race.dark.on { border-color: #d9534f; color: #d9534f; background: #fff1f0; }
 .aa-db-q { display: inline-flex; align-items: center; gap: 4px; margin: 0 10px 0 0; cursor: pointer; }
 .aa-db-q.aa-quality-common { color: #6c7383; }
-.aa-db-fhead { text-align: center; font-weight: 600; color: #fff; background: #4d83ff; border-radius: 4px; padding: 4px; margin: 4px 0 10px; }
+.aa-db-fhead { display: block; width: 100%; border: 0; text-align: center; font-weight: 600; color: #fff; background: #4d83ff; border-radius: 4px; padding: 5px; margin: 4px 0 10px; cursor: pointer; }
+.aa-db-fhead:hover { background: #3b72f0; }
+.aa-db-fhead .mdi { display: inline-block; transition: transform .15s; }
+.aa-db-fhead[aria-expanded="true"] .mdi { transform: rotate(180deg); }
+.aa-db-fcount { background: #fff; color: #4d83ff; border-radius: 10px; padding: 0 8px; margin-left: 6px; font-size: .8rem; }
 .aa-db-stats { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-bottom: 10px; }
 .aa-db-stats button { border: 1px solid #b7e4c7; background: #effaf3; color: #1e7d45; border-radius: 4px; padding: 3px 10px; font-size: .85rem; }
 .aa-db-stats button.on { background: #19a974; border-color: #19a974; color: #fff; }

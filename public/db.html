@@ -41,10 +41,6 @@
                         <input type="number" class="form-control form-control-sm" id="f-lv-min" min="1" max="99">
                         <span>~</span>
                         <input type="number" class="form-control form-control-sm" id="f-lv-max" min="1" max="99">
-                        <label class="ms-4">魔石孔</label>
-                        <input type="number" class="form-control form-control-sm" id="f-slot-min" min="0" max="6">
-                        <span>~</span>
-                        <input type="number" class="form-control form-control-sm" id="f-slot-max" min="0" max="6">
                       </div>
                       <div class="aa-db-frow">
                         <label>种族</label>
@@ -52,8 +48,10 @@
                         <button type="button" class="aa-db-race dark" data-race="1" title="魔族"><i class="mdi mdi-weather-night"></i> 魔族</button>
                       </div>
                       <div class="aa-db-frow" id="f-quality"></div>
-                      <div class="aa-db-fhead">附加属性</div>
-                      <div class="aa-db-stats" id="f-stats"></div>
+                      <button type="button" class="aa-db-fhead" id="f-stats-toggle" aria-expanded="false">
+                        <i class="mdi mdi-chevron-down"></i> 附加属性 <span class="aa-db-fcount d-none" id="f-stats-count"></span>
+                      </button>
+                      <div class="aa-db-stats d-none" id="f-stats"></div>
                     </div>
                     <div class="aa-db-bar">
                       <div class="d-flex align-items-center gap-2">
@@ -201,12 +199,25 @@
     document.getElementById('f-stats').addEventListener('click', (e) => {
       const b = e.target.closest('[data-stat]'); if (!b) return;
       b.classList.toggle('on'); toggle(state.stats, b.dataset.stat);
+      statsCount();
+    });
+    // 附加属性 is collapsed by default; the header shows how many are selected
+    function statsCount() {
+      const c = document.getElementById('f-stats-count');
+      c.textContent = AA.t('已选 {0}', state.stats.size);
+      c.classList.toggle('d-none', state.stats.size === 0);
+    }
+    document.getElementById('f-stats-toggle').addEventListener('click', (e) => {
+      const btn = e.currentTarget, open = btn.getAttribute('aria-expanded') !== 'true';
+      btn.setAttribute('aria-expanded', String(open));
+      document.getElementById('f-stats').classList.toggle('d-none', !open);
     });
     document.getElementById('btn-reset').addEventListener('click', () => {
-      ['f-lv-min', 'f-lv-max', 'f-slot-min', 'f-slot-max', 'f-q'].forEach((id) => { document.getElementById(id).value = ''; });
+      ['f-lv-min', 'f-lv-max', 'f-q'].forEach((id) => { document.getElementById(id).value = ''; });
       document.querySelectorAll('#db-items .on').forEach((x) => x.classList.remove('on'));
       document.querySelectorAll('#f-quality input').forEach((x) => { x.checked = false; });
       state.races.clear(); state.qualities.clear(); state.stats.clear();
+      statsCount();
     });
 
     function render() {
