@@ -28,16 +28,14 @@
     { "name": "主服务器 Server64", "process": "Server64", "port": 7777 },
     { "name": "NPC 服务器", "process": "NPCSvr64" },
     { "name": "日志服务器", "process": "LogServer64", "port": 2051 },
-    { "name": "聊天服务器", "process": "ChannelChattingServer", "port": 10241 },
-    { "name": "GM 命令代理", "port": 7779 }
+    { "name": "聊天服务器", "process": "ChannelChattingServer", "port": 10241 }
   ],
-  "proxy": {
-    "listenHost": "127.0.0.1",
-    "listenPort": 7779,
-    "targetHost": "127.0.0.1",
-    "targetPort": 7777,
-    "autoStart": true,
-    "logPackets": false
+  "capture": {
+    "device": "\\Device\\NPF_Loopback",
+    "serverHost": "127.0.0.1",
+    "serverPort": 7777,
+    "logPackets": false,
+    "combatDump": false
   },
   "shop": {
     "listenHost": "127.0.0.1",

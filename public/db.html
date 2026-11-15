@@ -792,7 +792,7 @@
       renderNpcTab();
     }
 
-    // GM commands for the NPC (type them in game chat with the GM proxy running):
+    // GM commands for the NPC (send them from the enabled client console with GM permissions):
     //   //teleport_to_named <internal name>  Server64 HandleBuilderOperation: XML_ParseNPCNameId turns the name into the
     //                            name id, then a live NPC with it is looked up and you are moved to it
     //   //wishid <count> <id>     spawns <count> of it next to you;  //wish <internal name> does the same by name
@@ -800,6 +800,7 @@
         <input type="text" class="form-control aa-mono" value="${AA.esc(cmd)}" readonly>
         <button type="button" class="btn btn-primary" data-copy="${AA.esc(cmd)}">${AA.t('复制')}</button></div>`;
     const npcGm = (n) => `<div class="aa-item-side">
+        <p class="text-muted small">${AA.t('GM 命令请在客户端控制台中发送，聊天框不再转译。')}</p>
         <div class="aa-side-box">
           <div class="aa-side-title">${AA.t('前往这个 NPC')}</div>
           ${copyRow(`//teleport_to_named ${n.k}`)}

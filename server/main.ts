@@ -9,7 +9,7 @@ import { announce } from './cached.ts';
 import { serviceStatus, summary, listCharacters, getCharacter, sendMail, validateMailItems, listAccounts, findCashMail } from './game.ts';
 import { loadItems, tryLoadItems, itemsCacheExists, searchItems } from './items.ts';
 import { queryItems, getItem, queryGroups, getGroup, queryNpcs, getNpc, npcInstances, npcRegions } from './dbstatic.ts';
-import { GmProxy } from './gmproxy.ts';
+import { PassiveCapture } from './capture.ts';
 import { ShopServer } from './shopserver.ts';
 import { ShopAgentServer } from './shopagent.ts';
 import { ShopDb, SHOP_DB } from './shopdb.ts';
@@ -17,8 +17,7 @@ import { L, pick, errMsg, langOf, type Lang, type Msg } from './i18n.ts';
 
 const cfg = loadConfig();
 const secrets = loadSecrets();
-const proxy = new GmProxy({ ...cfg.proxy, logDir: path.join(ROOT, 'data', 'proxy_logs') });
-proxy.logPackets = cfg.proxy.logPackets;
+const proxy = new PassiveCapture({ ...cfg.capture, logDir: path.join(ROOT, 'data', 'proxy_logs') });
 // Shop data (points, orders, catalog) and the admin log live in our own AionShop database.
 const shopDb = new ShopDb(cfg);
 let shopDbError: Msg | null = null;     // set if AionShop could not be created/opened at startup
@@ -137,7 +136,7 @@ route('POST', '/api/logout', async () => ({ ok: true, __cookie: clearCookie }), 
 // ---- dashboard ----
 route('GET', '/api/status', async () => {
   const [services, sum] = await Promise.all([
-    serviceStatus(cfg, proxy.running ? { [cfg.proxy.listenPort]: true } : {}),
+    serviceStatus(cfg),
     summary(cfg).catch((e: Error) => ({ error: e.message })),
   ]);
   return { services, summary: sum, cached: `${cfg.cached.host}:${cfg.cached.port}`, itemsCache: itemsCacheExists(cfg.itemsCache) };
@@ -236,13 +235,10 @@ route('POST', '/api/mail', async (req) => {
   });
 });
 
-// ---- GM-command proxy ----
-const proxyStatus = () => ({
-  running: proxy.running, startedAt: proxy.startedAt, clients: proxy.clients, commands: proxy.commands,
-  listen: `${cfg.proxy.listenHost}:${cfg.proxy.listenPort}`, target: `${cfg.proxy.targetHost}:${cfg.proxy.targetPort}`,
-  logPackets: proxy.logPackets, error: proxy.lastError,
-});
+// ---- Optional passive Npcap capture (legacy API URLs retained for bookmarks) ----
+const proxyStatus = () => proxy.status();
 const withLang = <T extends { error: Msg | null }>(s: T, lang: Lang) => ({ ...s, error: s.error ? pick(s.error, lang) : null });
+route('GET', '/api/proxy/devices', async () => proxy.devices());
 route('GET', '/api/proxy/status', async (req) => withLang(proxyStatus(), langOf(req)));
 route('POST', '/api/proxy/start', async (req) => {
   try { await proxy.start(); } catch (e: any) { throw new HttpError(409, errMsg(e)); }
@@ -251,7 +247,7 @@ route('POST', '/api/proxy/start', async (req) => {
 route('POST', '/api/proxy/stop', async (req) => { await proxy.stop(); return withLang(proxyStatus(), langOf(req)); });
 route('POST', '/api/proxy/options', async (req) => {
   const b = await readJson(req);
-  if (typeof b.logPackets === 'boolean') proxy.logPackets = b.logPackets;
+  try { proxy.configure(b); } catch (e: any) { throw new HttpError(400, e.message); }
   return withLang(proxyStatus(), langOf(req));
 });
 route('GET', '/api/proxy/logs', async (req, url) => {
@@ -438,11 +434,7 @@ server.listen(cfg.listenPort, cfg.listenHost, () => {
   gamePool(cfg)
     .then(() => console.log(`数据库连接正常: ${dbTarget(cfg)}`))
     .catch((e: Error) => console.log(`数据库连接失败: ${e.message}`));
-  if (cfg.proxy.autoStart) {
-    proxy.start()
-      .then(() => console.log(`GM 命令代理已启动: ${cfg.proxy.listenHost}:${cfg.proxy.listenPort} -> ${cfg.proxy.targetHost}:${cfg.proxy.targetPort}`))
-      .catch((e: Error) => console.log(`GM 命令代理未启动: ${e.message}`));
-  }
+  console.log('Npcap 旁路监听默认关闭，可在数据报文抓取页面手动开启。');
   // The shop services need AionShop: create/upgrade it (and import the old JSON files once) before starting them.
   (async () => {
     try {

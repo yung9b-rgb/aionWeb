@@ -32,7 +32,7 @@ export type Config = {
   db: DbConfig;
   itemsCache: string;
   services: ServiceDef[];
-  proxy: { listenHost: string; listenPort: number; targetHost: string; targetPort: number; autoStart: boolean; logPackets: boolean };
+  capture: { device: string; serverHost: string; serverPort: number; logPackets: boolean; combatDump: boolean };
   shop: { listenHost: string; listenPort: number; autoStart: boolean };
   shopAgent: { listenHost: string; listenPort: number; autoStart: boolean };
 };
@@ -66,10 +66,9 @@ const DEFAULTS: Config = {
     { name: 'NPC 服务器', process: 'NPCSvr64' },
     { name: '日志服务器', process: 'LogServer64', port: 2051 },
     { name: '聊天服务器', process: 'ChannelChattingServer', port: 10241 },
-    { name: 'GM 命令代理', port: 7779 },
   ],
-  // GM-command proxy hosted in this process (replaces AionServer/GMProxy/aion_gm_proxy.py)
-  proxy: { listenHost: '127.0.0.1', listenPort: 7779, targetHost: '127.0.0.1', targetPort: 7777, autoStart: true, logPackets: false },
+  // Passive only; always starts OFF. Legacy proxy.autoStart is intentionally ignored.
+  capture: { device: String.raw`\Device\NPF_Loopback`, serverHost: '127.0.0.1', serverPort: 7777, logPackets: false, combatDump: false },
   // in-game cash shop catalog server; MainServer/common.xml <shopServerAddr>/<shopServerPort> must point here
   shop: { listenHost: '127.0.0.1', listenPort: 2300, autoStart: true },
   // cash points (and later buy/gift); MainServer/common.xml <shopAgentServerAddr>/<shopAgentServerPort> must point here
@@ -92,7 +91,8 @@ export function loadConfig(): Config {
     ...user,
     cached: { ...DEFAULTS.cached, ...user.cached },
     db: { ...DEFAULTS.db, ...user.db },
-    proxy: { ...DEFAULTS.proxy, ...user.proxy },
+    capture: { ...DEFAULTS.capture, ...user.capture },
+    services: (user.services ?? DEFAULTS.services).filter((s: ServiceDef) => s.name !== 'GM 命令代理'),
     shop: { ...DEFAULTS.shop, ...user.shop },
     shopAgent: { ...DEFAULTS.shopAgent, ...user.shopAgent },
   });

@@ -20,7 +20,10 @@
           <div class="row">
             <div class="col-md-12 grid-margin">
               <h2>数据报文抓取</h2>
-              <p class="text-muted mb-0">游戏客户端连到本代理，代理把报文转发给主服务器；聊天框里以 <code>//</code> 开头的内容会被改写成 GM 命令。</p>
+              <p class="text-muted mb-0">客户端直接连接主服务器；旁路监听只记录报文，开启或停止均不影响游戏连接。</p>
+              <p class="text-muted mt-2 mb-0">GM 命令请在客户端控制台中发送（如 <code>//loc</code>），聊天框中的命令不再转译。需要已启用控制台的客户端及 GM 权限。</p>
+              <p class="text-muted mt-2 mb-0">使用旁路监听前，请在运行 AionWeb 的主服电脑上安装 <a href="https://npcap.com/#download" target="_blank" rel="noopener">Npcap</a>。监听默认关闭，每次启动后台后需手动开启。</p>
+              <p class="text-muted mt-2 mb-0">先开启监听，再重新连接游戏，才能捕获握手并解密报文。监听中途开启时，已有连接不会自动补录。</p>
             </div>
           </div>
 
@@ -31,9 +34,9 @@
                   <div class="d-flex flex-wrap align-items-center justify-content-between">
                     <div class="d-flex flex-wrap align-items-center aa-proxy-stats">
                       <div class="me-4 mb-2"><small class="text-muted d-block">状态</small><span id="st-state">–</span></div>
-                      <div class="me-4 mb-2"><small class="text-muted d-block">监听 → 转发</small><span class="aa-mono" id="st-route">–</span></div>
-                      <div class="me-4 mb-2"><small class="text-muted d-block">游戏连接</small><span id="st-clients">–</span></div>
-                      <div class="me-4 mb-2"><small class="text-muted d-block">已转换 GM 命令</small><span id="st-cmds">–</span></div>
+                      <div class="me-4 mb-2"><small class="text-muted d-block">监听目标</small><span class="aa-mono" id="st-route">–</span></div>
+                      <div class="me-4 mb-2"><small class="text-muted d-block">已解码连接</small><span id="st-clients">–</span></div>
+                      <div class="me-4 mb-2"><small class="text-muted d-block">已观察原生 GM 命令</small><span id="st-cmds">–</span></div>
                       <div class="me-4 mb-2"><small class="text-muted d-block">启动时间</small><span id="st-since">–</span></div>
                     </div>
                     <div class="mb-2">
@@ -41,6 +44,15 @@
                       <button class="btn btn-outline-danger" id="btn-stop"><i class="mdi mdi-stop"></i> 停止</button>
                     </div>
                   </div>
+                  <div class="row mt-3">
+                    <div class="col-md-6 mb-2"><label for="capture-device">抓包网卡</label><select class="form-select" id="capture-device"></select></div>
+                    <div class="col-md-4 mb-2"><label for="capture-host">主服 IP</label><input class="form-control" id="capture-host" value="127.0.0.1"></div>
+                    <div class="col-md-2 mb-2"><label for="capture-port">主服端口</label><input class="form-control" id="capture-port" type="number" min="1" max="65535" value="7777"></div>
+                  </div>
+                  <p class="text-muted small">同机游戏或 SSH 隧道接入请选择 Npcap Loopback；局域网直连请选择对应物理网卡。这里填写主服实际端口，而非公网映射端口。修改仅用于本次监听。</p>
+                  <button class="btn btn-sm btn-outline-secondary mb-2" id="btn-devices">重新检测 Npcap</button>
+                  <p class="text-danger small mb-1" id="device-error"></p>
+                  <p class="text-muted small mb-1" id="st-health"></p>
                   <p class="text-danger small mb-0" id="st-error"></p>
                 </div>
               </div>
@@ -56,6 +68,7 @@
                     <div class="d-flex flex-wrap align-items-center">
                       <input class="form-control form-control-sm me-3 mb-2" id="filter" placeholder="筛选关键字" style="width:180px">
                       <div class="form-check me-3 mb-2"><label class="form-check-label"><input type="checkbox" class="form-check-input" id="opt-packets"> 记录全部报文</label></div>
+                      <div class="form-check me-3 mb-2"><label class="form-check-label"><input type="checkbox" class="form-check-input" id="opt-combat"> 战斗抓包</label></div>
                       <div class="form-check me-3 mb-2"><label class="form-check-label"><input type="checkbox" class="form-check-input" id="opt-follow" checked> 自动滚动</label></div>
                       <button class="btn btn-sm btn-outline-secondary mb-2" id="btn-clear"><i class="mdi mdi-delete-sweep"></i> 清空</button>
                     </div>
@@ -63,7 +76,8 @@
                   <div id="log" class="aa-log"></div>
                   <p class="text-muted small mt-2 mb-0">
                     日志同时按天写入 <code>AionWeb\data\proxy_logs\gm_日期.log</code>。
-                    "记录全部报文"会记下每个收发的包头，量很大，只在排查问题时打开。
+                    "记录全部报文"会记下每个收发的包头，量很大，只在排查问题时打开。<br>
+                    "战斗抓包"把攻击、技能、血量等报文完整写入 <code>combat_日期.log</code>，用 <code>Tools\aion-proxy\combat_watch.py</code> 实时解析成战况。
                   </p>
                 </div>
               </div>
@@ -85,18 +99,29 @@
     const CAT = { gm: 'GM', conn: AA.t('连接'), pkt: AA.t('报文'), err: AA.t('错误') };
     let last = 0;
     let lines = [];
+    let settingsLoaded = false, dependencyReady = false, busy = false;
+    let state = null;
 
     function renderStatus(s) {
       document.getElementById('st-state').innerHTML = s.running
         ? `<span class="badge bg-success">${AA.t('运行中')}</span>` : `<span class="badge bg-secondary">${AA.t('已停止')}</span>`;
-      document.getElementById('st-route').textContent = `${s.listen} → ${s.target}`;
+      state = s;
+      document.getElementById('st-route').textContent = `${s.serverHost}:${s.serverPort}`;
       document.getElementById('st-clients').textContent = s.running ? s.clients : '–';
       document.getElementById('st-cmds').textContent = s.commands;
       document.getElementById('st-since').textContent = s.startedAt ? AA.fmtTime(s.startedAt) : '–';
-      document.getElementById('st-error').textContent = !s.running && s.error ? s.error : '';
-      document.getElementById('btn-start').disabled = s.running;
-      document.getElementById('btn-stop').disabled = !s.running;
+      document.getElementById('st-error').textContent = s.error || '';
+      document.getElementById('btn-start').disabled = busy || s.running || s.starting || s.stopping || !dependencyReady;
+      document.getElementById('btn-stop').disabled = busy || (!s.running && !s.starting) || s.stopping;
+      document.getElementById('st-health').textContent = AA.t('捕获帧 {0} · 握手等待 {1} · 未跟踪数据段 {2} · 失步连接 {3} · 驱动丢包 {4} · 日志丢弃 {5}', s.captured, s.waiting, s.ignored, s.lost, s.driverDropped, s.droppedLogs);
+      for (const id of ['capture-device', 'capture-host', 'capture-port']) document.getElementById(id).disabled = busy || s.running || s.starting || s.stopping;
+      if (!settingsLoaded) {
+        document.getElementById('capture-host').value = s.serverHost;
+        document.getElementById('capture-port').value = s.serverPort;
+        settingsLoaded = true;
+      }
       document.getElementById('opt-packets').checked = s.logPackets;
+      document.getElementById('opt-combat').checked = s.combatDump;
     }
 
     function fmt(l) {
@@ -128,19 +153,38 @@
       } catch (e) { /* keep polling */ }
     }
 
+    async function devices() {
+      try {
+        const r = await AA.api('GET', '/api/proxy/devices');
+        dependencyReady = r.devices.length > 0;
+        const select = document.getElementById('capture-device');
+        const previous = select.value || (state && state.device);
+        select.innerHTML = r.devices.map(d => `<option value="${AA.esc(d.name)}">${AA.esc(d.description)} (${AA.esc(d.name)})</option>`).join('');
+        if (r.devices.some(d => d.name === previous)) select.value = previous;
+        document.getElementById('device-error').textContent = r.error || (!dependencyReady ? AA.t('没有可用的 Npcap 网卡，请检查安装和抓包权限。') : '');
+      } catch (e) { dependencyReady = false; document.getElementById('device-error').textContent = e.message; }
+      if (state) renderStatus(state);
+    }
+    document.getElementById('btn-devices').addEventListener('click', devices);
     document.getElementById('btn-start').addEventListener('click', async () => {
-      try { renderStatus(await AA.api('POST', '/api/proxy/start', {})); AA.toast(AA.t('代理已启动')); }
-      catch (e) { AA.toast(AA.t('启动失败：{0}', e.message), 'danger'); }
-      poll();
+      busy = true; if (state) renderStatus(state);
+      try {
+        await AA.api('POST', '/api/proxy/options', {device: document.getElementById('capture-device').value, serverHost: document.getElementById('capture-host').value.trim(), serverPort: Number(document.getElementById('capture-port').value)});
+        renderStatus(await AA.api('POST', '/api/proxy/start', {})); AA.toast(AA.t('旁路监听已开启，请重新连接游戏。'));
+      } catch (e) { AA.toast(AA.t('启动失败：{0}', e.message), 'danger'); }
+      finally { busy = false; poll(); }
     });
     document.getElementById('btn-stop').addEventListener('click', async () => {
-      if (!confirm(AA.t('停止代理会断开当前所有游戏连接（在线的角色会掉线），确定吗？'))) return;
-      renderStatus(await AA.api('POST', '/api/proxy/stop', {}));
-      AA.toast(AA.t('代理已停止'), 'warning');
-      poll();
+      busy = true; if (state) renderStatus(state);
+      try { renderStatus(await AA.api('POST', '/api/proxy/stop', {})); AA.toast(AA.t('旁路监听已停止，游戏连接不受影响。')); }
+      catch (e) { AA.toast(e.message, 'danger'); }
+      finally { busy = false; poll(); }
     });
     document.getElementById('opt-packets').addEventListener('change', async (e) => {
       renderStatus(await AA.api('POST', '/api/proxy/options', { logPackets: e.target.checked }));
+    });
+    document.getElementById('opt-combat').addEventListener('change', async (e) => {
+      renderStatus(await AA.api('POST', '/api/proxy/options', { combatDump: e.target.checked }));
     });
     document.getElementById('btn-clear').addEventListener('click', async () => {
       await AA.api('POST', '/api/proxy/clear', {});
@@ -150,7 +194,7 @@
     document.getElementById('filter').addEventListener('input', renderLog);
 
     renderLog();
-    poll();
+    poll().then(devices);
     setInterval(poll, 1000);
   </script>
 </body>

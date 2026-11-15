@@ -29,3 +29,8 @@ __pycache__/
 # OS junk
 .DS_Store
 Thumbs.db
+
+# capture compiler cache
+tools/build/
+config.json.bak*
+tools/bin/*.pdb
